@@ -18,13 +18,27 @@
     --s1:4px; --s2:8px; --s3:12px; --s4:16px; --s5:20px; --s6:24px; --s7:32px; --s8:40px; --s9:48px; --s10:64px;
   }
   *{box-sizing:border-box; margin:0; padding:0;}
-  body{ background:var(--bg); color:var(--text-primary); font-family:'Inter',sans-serif; -webkit-font-smoothing:antialiased; display:flex; justify-content:center; }
-  #app{ width:100%; max-width:480px; min-height:100vh; background:var(--bg); position:relative; padding-bottom:96px; }
+  body{ background:var(--bg); color:var(--text-primary); font-family:'Inter',sans-serif; -webkit-font-smoothing:antialiased; }
+  #app{ display:flex; width:100%; min-height:100vh; background:var(--bg); }
+  .sidebar{ width:264px; flex-shrink:0; background:var(--card); border-right:1px solid var(--border); display:flex; flex-direction:column; padding:var(--s6) var(--s4); position:fixed; top:0; left:0; bottom:0; }
+  .sidebar-brand{ font-family:'Playfair Display'; font-weight:700; font-size:22px; color:var(--brown-800); padding:0 var(--s3); margin-bottom:var(--s8); display:flex; align-items:center; gap:10px; }
+  .sidebar-brand .dot{ width:10px; height:10px; border-radius:50%; background:var(--coral-500); }
+  .sidebar-nav{ display:flex; flex-direction:column; gap:2px; flex:1; }
+  .sidebar-item{ display:flex; align-items:center; gap:12px; padding:11px 14px; border-radius:12px; color:var(--text-secondary); cursor:pointer; font-size:14px; font-weight:500; transition:all .15s ease; white-space:nowrap; }
+  .sidebar-item svg{ flex-shrink:0; }
+  .sidebar-item:hover{ background:var(--surface); color:var(--brown-800); }
+  .sidebar-item.active{ background:var(--brown-600); color:#fff; }
+  .sidebar-footer{ border-top:1px solid var(--border); padding-top:var(--s4); margin-top:var(--s4); display:flex; align-items:center; gap:10px; padding-left:14px; cursor:pointer; border-radius:12px; }
+  .sidebar-footer:hover{ background:var(--surface); }
+  .sidebar-footer .name{ font-size:13px; font-weight:600; color:var(--brown-800); }
+  .sidebar-footer .role{ font-size:11px; color:var(--text-muted); }
+  #main-area{ flex:1; margin-left:264px; min-height:100vh; position:relative; }
+  #screen-content{ max-width:1040px; margin:0 auto; padding-bottom:var(--s9); }
   h1,h2,h3,.display{ font-family:'Playfair Display',serif; font-weight:700; color:var(--brown-800); }
   .muted{ color:var(--text-muted); } .secondary{ color:var(--text-secondary); }
 
-  .topbar{ display:flex; align-items:center; justify-content:space-between; padding:var(--s6) var(--s5) var(--s4); }
-  .topbar .greet{ font-size:22px; } .topbar .sub{ font-size:13px; color:var(--text-secondary); margin-top:2px; }
+  .topbar{ display:flex; align-items:center; justify-content:space-between; padding:var(--s7) var(--s7) var(--s5); }
+  .topbar .greet{ font-size:26px; } .topbar .sub{ font-size:13px; color:var(--text-secondary); margin-top:2px; }
   .icon-btn{ width:40px; height:40px; border-radius:12px; background:var(--card); border:1px solid var(--border);
     display:flex; align-items:center; justify-content:center; cursor:pointer; transition:all .2s ease; flex-shrink:0; }
   .icon-btn:hover{ border-color:var(--border-strong); }
@@ -32,13 +46,13 @@
   .topbar-actions{ display:flex; gap:var(--s3); align-items:center; }
   .topbar-back{ display:flex; align-items:center; gap:var(--s3); }
 
-  main{ padding:0 var(--s5); }
+  main{ padding:0 var(--s7); }
   .section-title{ font-size:19px; margin:var(--s7) 0 var(--s4); display:flex; align-items:center; justify-content:space-between; }
   .section-title .see-all{ font-family:'Inter'; font-weight:500; font-size:13px; color:var(--brown-600); cursor:pointer; }
 
   .card{ background:var(--card); border:1px solid var(--border); border-radius:20px; padding:var(--s5); box-shadow:0 1px 3px rgba(45,28,25,0.04); margin-bottom:var(--s4); }
   .card-row{ display:flex; align-items:center; gap:var(--s4); }
-  .stat-grid{ display:grid; grid-template-columns:1fr 1fr; gap:var(--s4); }
+  .stat-grid{ display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:var(--s4); }
   .stat-card{ background:var(--card); border:1px solid var(--border); border-radius:20px; padding:var(--s5); }
   .stat-label{ font-size:12px; color:var(--text-secondary); font-weight:500; margin-bottom:var(--s2); }
   .stat-value{ font-size:22px; font-weight:700; color:var(--brown-800); font-family:'Inter'; }
@@ -78,29 +92,23 @@
   .btn-secondary{ background:#fff; color:var(--brown-600); border-color:var(--border); } .btn-secondary:hover{ border-color:var(--border-strong); }
   .btn-accent{ background:var(--coral-500); color:#fff; } .btn-accent:hover{ background:var(--coral-600); }
   .btn-block{ width:100%; } .btn-sm{ padding:8px 14px; font-size:12px; border-radius:10px; }
-  .fab{ position:fixed; bottom:96px; right:calc(50% - 240px + 20px); width:56px; height:56px; border-radius:18px; background:var(--brown-600); color:#fff; display:flex; align-items:center; justify-content:center; cursor:pointer; box-shadow:0 8px 20px rgba(74,46,42,0.28); border:none; z-index:20; transition:transform .2s ease; }
-  .fab:hover{ transform:scale(1.05); }
-  @media (max-width:520px){ .fab{ right:20px; } }
+  .fab{ position:fixed; bottom:36px; right:36px; width:56px; height:56px; border-radius:18px; background:var(--brown-600); color:#fff; display:flex; align-items:center; justify-content:center; cursor:pointer; box-shadow:0 8px 20px rgba(74,46,42,0.28); border:none; z-index:20; transition:transform .2s ease; }
+  .fab:hover{ transform:scale(1.06); }
 
-  .quick-actions{ display:flex; gap:var(--s3); overflow-x:auto; padding-bottom:4px; }
-  .qa-item{ flex:0 0 auto; display:flex; flex-direction:column; align-items:center; gap:var(--s2); cursor:pointer; width:76px; }
-  .qa-icon{ width:52px; height:52px; border-radius:16px; background:var(--card); border:1px solid var(--border); display:flex; align-items:center; justify-content:center; color:var(--brown-600); transition:all .2s ease; }
-  .qa-item:hover .qa-icon{ background:var(--surface); border-color:var(--border-strong); }
-  .qa-label{ font-size:11px; text-align:center; color:var(--text-secondary); font-weight:500; }
+  .quick-actions{ display:flex; gap:var(--s6); justify-content:center; padding:var(--s2) 0 var(--s3); }
+  .qa-item{ flex:0 0 auto; display:flex; flex-direction:column; align-items:center; gap:var(--s3); cursor:pointer; width:104px; }
+  .qa-icon{ width:72px; height:72px; border-radius:20px; background:var(--card); border:1px solid var(--border); display:flex; align-items:center; justify-content:center; color:var(--brown-600); transition:all .2s ease; }
+  .qa-item:hover .qa-icon{ background:var(--surface); border-color:var(--border-strong); transform:translateY(-2px); }
+  .qa-label{ font-size:13px; text-align:center; color:var(--text-secondary); font-weight:600; }
 
   .filter-row{ display:flex; gap:var(--s2); overflow-x:auto; padding:var(--s2) 0 var(--s5); }
   .filter-chip{ flex:0 0 auto; padding:8px 16px; border-radius:20px; font-size:13px; font-weight:500; border:1px solid var(--border); background:#fff; color:var(--text-secondary); cursor:pointer; transition:all .2s ease; }
   .filter-chip.active{ background:var(--brown-600); color:#fff; border-color:var(--brown-600); }
 
-  .bottom-nav{ position:fixed; bottom:0; left:50%; transform:translateX(-50%); width:100%; max-width:480px; background:#fff; border-top:1px solid var(--border); display:flex; padding:10px 8px calc(10px + env(safe-area-inset-bottom)); z-index:30; }
-  .nav-item{ flex:1; display:flex; flex-direction:column; align-items:center; gap:4px; cursor:pointer; padding:6px 0; color:var(--text-muted); transition:color .2s ease; }
-  .nav-item.active{ color:var(--brown-600); }
-  .nav-label{ font-size:10px; font-weight:600; }
-
-  .modal-overlay{ position:fixed; inset:0; background:rgba(31,25,24,0.45); display:none; align-items:flex-end; justify-content:center; z-index:100; }
+  .modal-overlay{ position:fixed; inset:0; background:rgba(31,25,24,0.45); display:none; align-items:center; justify-content:center; z-index:100; padding:var(--s6); }
   .modal-overlay.open{ display:flex; }
-  .modal{ background:#fff; width:100%; max-width:480px; border-radius:24px 24px 0 0; padding:var(--s6) var(--s5) var(--s8); max-height:90vh; overflow-y:auto; animation:slideUp .25s ease; }
-  @keyframes slideUp{ from{ transform:translateY(24px); opacity:0; } to{ transform:translateY(0); opacity:1; } }
+  .modal{ background:#fff; width:100%; max-width:560px; border-radius:20px; padding:var(--s7); max-height:86vh; overflow-y:auto; animation:modalIn .2s ease; box-shadow:0 24px 60px rgba(31,25,24,0.25); }
+  @keyframes modalIn{ from{ transform:translateY(12px) scale(.98); opacity:0; } to{ transform:translateY(0) scale(1); opacity:1; } }
   .modal-header{ display:flex; align-items:center; justify-content:space-between; margin-bottom:var(--s6); }
   .modal-title{ font-size:18px; }
   .field{ margin-bottom:var(--s4); }
@@ -118,7 +126,7 @@
   .toast{ position:fixed; bottom:110px; left:50%; transform:translateX(-50%) translateY(20px); background:var(--brown-800); color:#fff; padding:12px 20px; border-radius:12px; font-size:13px; font-weight:500; opacity:0; transition:all .25s ease; z-index:200; pointer-events:none; white-space:nowrap; max-width:90%; text-overflow:ellipsis; overflow:hidden; }
   .toast.show{ opacity:1; transform:translateX(-50%) translateY(0); }
 
-  .more-grid{ display:grid; grid-template-columns:1fr 1fr; gap:var(--s4); }
+  .more-grid{ display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:var(--s4); }
   .more-tile{ background:var(--card); border:1px solid var(--border); border-radius:20px; padding:var(--s5); cursor:pointer; transition:all .2s ease; }
   .more-tile:hover{ border-color:var(--border-strong); }
   .more-tile .list-icon{ margin-bottom:var(--s4); }
@@ -156,7 +164,7 @@
   .impact-pill{ font-size:10px; font-weight:700; padding:3px 9px; border-radius:10px; }
   .impact-pill.on{ background:#EAF3E9; color:#5D8A5A; }
   .impact-pill.off{ background:var(--surface); color:var(--text-muted); }
-  .crm-stats{ display:grid; grid-template-columns:1fr 1fr; gap:var(--s3); margin-bottom:var(--s2); }
+  .crm-stats{ display:grid; grid-template-columns:repeat(auto-fit,minmax(200px,1fr)); gap:var(--s3); margin-bottom:var(--s2); }
   .crm-stat{ background:var(--card); border:1px solid var(--border); border-radius:16px; padding:var(--s4); }
   .crm-stat .n{ font-size:20px; font-weight:700; color:var(--brown-800); font-family:'Inter'; }
   .crm-stat .l{ font-size:11px; color:var(--text-secondary); margin-top:2px; }
@@ -178,9 +186,11 @@
 </head>
 <body>
 <div id="app">
-  <div id="screen-content"></div>
-  <button class="fab" id="fabBtn"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg></button>
-  <nav class="bottom-nav" id="bottomNav"></nav>
+  <nav class="sidebar" id="sidebarNav"></nav>
+  <div id="main-area">
+    <div id="screen-content"></div>
+    <button class="fab" id="fabBtn"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg></button>
+  </div>
 </div>
 <div class="modal-overlay" id="modalOverlay"><div class="modal" id="modalBody"></div></div>
 <div class="toast" id="toast"></div>
@@ -282,7 +292,9 @@ const NAV = [
   { id:'clients', label:'Clientes', icon:'users' },
   { id:'content', label:'Conteúdo', icon:'calendar' },
   { id:'finance', label:'Financeiro', icon:'dollar' },
-  { id:'more', label:'Mais', icon:'more' },
+  { id:'performance', label:'Performance', icon:'briefcase' },
+  { id:'rewards', label:'Creator Rewards', icon:'gift' },
+  { id:'settings', label:'Configurações', icon:'settings' },
 ];
 const STATUS_CLIENT = ['Lead','Negociação','Contrato Enviado','Assinado','Em Produção','Finalizado'];
 const STATUS_BADGE_CLASS = { 'Lead':'badge-lead','Negociação':'badge-negociacao','Contrato Enviado':'badge-contrato','Assinado':'badge-assinado','Em Produção':'badge-producao','Finalizado':'badge-finalizado' };
@@ -352,9 +364,18 @@ async function callAI(systemPrompt, userPrompt){
 
 /* ---------- Nav ---------- */
 function renderNav(){
-  const nav = document.getElementById('bottomNav');
-  nav.innerHTML = NAV.map(n => `<div class="nav-item ${STATE.tab===n.id?'active':''}" data-tab="${n.id}">${icon(n.icon,22)}<span class="nav-label">${n.label}</span></div>`).join('');
-  nav.querySelectorAll('.nav-item').forEach(el=>{ el.addEventListener('click', ()=>{ STATE.tab = el.dataset.tab; STATE.clientDetailId=null; render(); }); });
+  const nav = document.getElementById('sidebarNav');
+  nav.innerHTML = `
+    <div class="sidebar-brand"><span class="dot"></span> AKORA</div>
+    <div class="sidebar-nav">
+      ${NAV.map(n => `<div class="sidebar-item ${STATE.tab===n.id?'active':''}" data-tab="${n.id}">${icon(n.icon,19)}<span>${n.label}</span></div>`).join('')}
+    </div>
+    <div class="sidebar-footer" id="sidebarProfile">
+      <div class="avatar" style="width:32px;height:32px;font-size:12px">${(STATE.profile.name||'C').charAt(0).toUpperCase()}</div>
+      <div><div class="name">${esc(STATE.profile.name||'Creator')}</div><div class="role">Ver perfil</div></div>
+    </div>`;
+  nav.querySelectorAll('.sidebar-item').forEach(el=>{ el.addEventListener('click', ()=>{ STATE.tab = el.dataset.tab; STATE.clientDetailId=null; render(); }); });
+  document.getElementById('sidebarProfile').addEventListener('click', ()=>{ STATE.tab='settings'; STATE.clientDetailId=null; render(); });
 }
 function topbar(sub, backAction){
   if(backAction){
@@ -472,7 +493,7 @@ function screenHome(){
       ${STATE.clients.length ? `<div class="card">${STATE.clients.slice(0,4).map(c=>`<div class="list-item"><div class="list-icon">${icon('users',18)}</div><div><div class="list-title">${esc(c.name)}</div><div class="list-sub">${esc(c.status)}</div></div><div class="list-right"><span class="badge ${STATUS_BADGE_CLASS[c.status]}">${esc(c.status)}</span></div></div>`).join('')}</div>` : emptyState('users','Nenhum cliente cadastrado','Adicione sua primeira marca na aba Clientes.')}
     </main>`;
 }
-function qa(iconName,label,tab,sub){ return `<div class="qa-item" data-goto="${tab}" ${sub?`data-sub="${sub}"`:''}><div class="qa-icon">${icon(iconName,22)}</div><div class="qa-label">${label}</div></div>`; }
+function qa(iconName,label,tab,sub){ return `<div class="qa-item" data-goto="${tab}" ${sub?`data-sub="${sub}"`:''}><div class="qa-icon">${icon(iconName,28)}</div><div class="qa-label">${label}</div></div>`; }
 let panelFilters = { status:'criados', platform:'Todas', niche:'Todos' };
 function contentPanel(){
   const platforms = ['Todas','Instagram','TikTok','YouTube','Blog','Outra'];
@@ -1283,17 +1304,17 @@ function financeGeral(){
     </div>
     <div class="card">
       <div class="stat-label" style="margin-bottom:var(--s4)">Faturamento em ${financeFilter.year}</div>
-      <div style="display:flex;align-items:flex-end;gap:6px;height:120px">
+      <div style="display:flex;align-items:flex-end;gap:6px;height:140px">
         ${MONTH_SHORT.map((m,i)=>`
           <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;height:100%;justify-content:flex-end;opacity:${monthIdx===null||monthIdx===i?1:.35}">
-            <div style="display:flex;align-items:flex-end;gap:2px;height:100%">
-              <div style="width:6px;background:#5D8A5A;border-radius:3px 3px 0 0;height:${Math.max(2,(monthlyIncome[i]/maxVal)*100)}%" title="${m} receita"></div>
-              <div style="width:6px;background:var(--coral-400);border-radius:3px 3px 0 0;height:${Math.max(2,(monthlyExpense[i]/maxVal)*100)}%" title="${m} despesa"></div>
+            <div style="display:flex;align-items:flex-end;gap:3px;height:100%">
+              <div style="width:10px;background:#5D8A5A;border-radius:3px 3px 0 0;height:${Math.max(2,(monthlyIncome[i]/maxVal)*100)}%" title="${m} receita"></div>
+              <div style="width:10px;background:var(--coral-400);border-radius:3px 3px 0 0;height:${Math.max(2,(monthlyExpense[i]/maxVal)*100)}%" title="${m} despesa"></div>
             </div>
-            <div style="font-size:9px;color:var(--text-muted)">${m}</div>
+            <div style="font-size:11px;color:var(--text-muted)">${m}</div>
           </div>`).join('')}
       </div>
-      <div style="display:flex;gap:var(--s5);margin-top:var(--s4);font-size:11px;color:var(--text-secondary)">
+      <div style="display:flex;gap:var(--s5);margin-top:var(--s4);font-size:12px;color:var(--text-secondary)">
         <span><span style="display:inline-block;width:8px;height:8px;border-radius:2px;background:#5D8A5A;margin-right:4px"></span>Receita</span>
         <span><span style="display:inline-block;width:8px;height:8px;border-radius:2px;background:var(--coral-400);margin-right:4px"></span>Despesa</span>
       </div>
@@ -1387,22 +1408,30 @@ function tiktokForm(existing){
     <button class="btn btn-primary btn-block" id="saveTiktok">${existing?'Salvar alterações':'Adicionar produto'}</button>`;
 }
 
-/* ============ MORE ============ */
-const MORE_MODULES = [
-  { icon:'briefcase', title:'Performance', sub:'Métricas manuais do creator', soon:false, view:'performance' },
-  { icon:'gift', title:'Creator Rewards', sub:'Programa de indicação', soon:false, view:'rewards' },
-  { icon:'settings', title:'Configurações', sub:'Idioma, moeda, perfil e meta', soon:false, view:'settings' },
-];
-function screenMore(){
-  if(STATE.moreView==='performance') return screenPerformance();
-  if(STATE.moreView==='rewards') return screenRewards();
+/* ============ SETTINGS (top-level) ============ */
+function screenSettings(){
+  const p = STATE.profile;
   return `
-    ${topbar('Todos os módulos AKORA')}
+    ${topbar('Perfil, idioma, moeda e meta')}
     <main>
-      <h2 style="font-size:19px;margin-bottom:var(--s4)">Mais</h2>
-      <div class="more-grid">${MORE_MODULES.map(m=>`
-        <div class="more-tile" ${m.soon?`data-more="${m.title}"`:`data-moreview="${m.view}"`}><div class="list-icon">${icon(m.icon,20)}</div><div class="tile-title">${m.title}</div><div class="tile-sub">${m.sub}</div>${m.soon?'<div class="soon-pill">Em breve</div>':''}</div>
-      `).join('')}</div>
+      <h2 style="font-size:19px;margin-bottom:var(--s4)">Configurações</h2>
+      <div class="card">
+        <div class="field-row">
+          <div class="field"><label>Seu nome/negócio</label><input id="st-name" value="${esc(p.name||'')}" placeholder="Seu nome ou marca"></div>
+          <div class="field"><label>Seu ${docLabel().label}</label><input id="st-doc" value="${esc(p.doc||'')}" placeholder="${docLabel().placeholder}"></div>
+        </div>
+        <div class="field-row">
+          <div class="field"><label>E-mail</label><input id="st-email" value="${esc(p.email||'')}" placeholder="voce@email.com"></div>
+          <div class="field"><label>Endereço completo</label><input id="st-address" value="${esc(p.address||'')}" placeholder="Rua, número, cidade, estado, CEP"></div>
+        </div>
+        <div class="field-row">
+          <div class="field"><label>Idioma do app</label><select id="st-lang">${Object.keys(LANG_NAMES).map(k=>`<option value="${k}" ${STATE.language===k?'selected':''}>${LANG_NAMES[k]}</option>`).join('')}</select></div>
+          <div class="field"><label>Moeda padrão</label><select id="st-currency">${Object.keys(CURRENCIES).map(c=>`<option value="${c}" ${STATE.currency===c?'selected':''}>${CURRENCIES[c].label}</option>`).join('')}</select></div>
+        </div>
+        <div class="field"><label>Meta de receita mensal</label><input id="st-goal" type="number" step="0.01" value="${STATE.goal}"></div>
+        <div class="field-hint" style="margin-bottom:var(--s4)">Seus dados (nome, documento, endereço) são usados para preencher automaticamente os contratos gerados por IA. O idioma escolhido aqui muda os textos da Calculadora de Preço (Conteúdo → Preço). A tradução completa do restante do app chega em uma próxima etapa.</div>
+        <button class="btn btn-primary" id="saveSettingsBtn">Salvar configurações</button>
+      </div>
     </main>`;
 }
 function settingsForm(){
@@ -1447,7 +1476,7 @@ function screenPerformance(){
     return s + (e.views>0 ? (interactions/e.views*100) : 0);
   },0) / entries.length) : 0;
   return `
-    ${topbar({title:'Performance', subtitle:'Métricas manuais do creator'}, true)}
+    ${topbar('Métricas manuais do creator')}
     <main>
       <div class="filter-row" style="padding-top:0">${platforms.map(p=>`<div class="filter-chip ${perfPlatformFilter===p?'active':''}" data-perfplatform="${p}">${p}</div>`).join('')}</div>
       <div class="stat-grid">
@@ -1514,7 +1543,7 @@ function screenRewards(){
   const currentTierLabel = [...REWARD_TIERS].reverse().find(t=>activeCount>=t.count);
   const progressPct = nextTier ? Math.min(100, Math.round((activeCount/nextTier.count)*100)) : 100;
   return `
-    ${topbar({title:'Creator Rewards', subtitle:'Seu programa de indicação'}, true)}
+    ${topbar('Seu programa de indicação')}
     <main>
       <div class="card" style="background:var(--brown-600);color:#fff;text-align:center">
         <div class="stat-label" style="color:rgba(255,255,255,0.75)">Seu link de indicação</div>
@@ -1573,17 +1602,17 @@ function render(){
   const el = document.getElementById('screen-content');
   if(STATE.tab==='clients' && STATE.clientDetailId){ el.innerHTML = screenClientDetail(STATE.clientDetailId); }
   else{
-    const screens = { home:screenHome, clients:screenClients, content:screenContent, finance:screenFinance, more:screenMore };
+    const screens = { home:screenHome, clients:screenClients, content:screenContent, finance:screenFinance, performance:screenPerformance, rewards:screenRewards, settings:screenSettings };
     el.innerHTML = screens[STATE.tab]();
   }
   renderNav();
   bindDynamic();
-  document.getElementById('fabBtn').style.display = (STATE.tab==='more' || (STATE.tab==='clients' && STATE.clientDetailId) || (STATE.tab==='content' && contentSub!=='fluxo')) ? 'none' : 'flex';
+  document.getElementById('fabBtn').style.display = (['performance','rewards','settings'].includes(STATE.tab) || (STATE.tab==='clients' && STATE.clientDetailId) || (STATE.tab==='content' && contentSub!=='fluxo')) ? 'none' : 'flex';
 }
 
 function bindDynamic(){
   document.getElementById('bellBtn')?.addEventListener('click', ()=> openModal(notificationsModal(), bindAssistant));
-  document.getElementById('avatarBtn')?.addEventListener('click', ()=> openModal(settingsForm(), bindSettingsSave));
+  document.getElementById('avatarBtn')?.addEventListener('click', ()=>{ STATE.tab='settings'; STATE.clientDetailId=null; render(); });
   document.getElementById('goalCard')?.addEventListener('click', ()=> openModal(goalForm(), bindGoalSave));
   document.querySelectorAll('[data-panelstatus]').forEach(el=> el.addEventListener('click', ()=>{ panelFilters.status = el.dataset.panelstatus; render(); }));
   document.getElementById('panelPlatform')?.addEventListener('change', (e)=>{ panelFilters.platform = e.target.value; render(); });
@@ -1679,13 +1708,10 @@ function bindDynamic(){
   document.querySelectorAll('[data-del-tiktok]').forEach(el=> el.addEventListener('click', async ()=>{ STATE.tiktok = STATE.tiktok.filter(p=>p.id!==el.dataset.delTiktok); await save('tiktok'); render(); showToast('Produto removido'); }));
   document.querySelectorAll('[data-copy-link]').forEach(el=> el.addEventListener('click', ()=>{ navigator.clipboard.writeText(el.dataset.copyLink); showToast('Link copiado'); }));
 
-  // more
-  document.querySelectorAll('[data-more]').forEach(el=> el.addEventListener('click', ()=> showToast(`${el.dataset.more} chega na próxima etapa 🚀`)));
-  document.querySelectorAll('[data-moreview]').forEach(el=> el.addEventListener('click', ()=>{
-    const view = el.dataset.moreview;
-    if(view==='settings'){ openModal(settingsForm(), bindSettingsSave); }
-    else{ STATE.moreView = view; render(); }
-  }));
+  // settings (top-level page)
+  document.getElementById('saveSettingsBtn') && bindSettingsSave();
+
+  // performance & rewards (top-level pages)
   document.querySelectorAll('[data-perfplatform]').forEach(el=> el.addEventListener('click', ()=>{ perfPlatformFilter = el.dataset.perfplatform; render(); }));
   document.getElementById('addPerfBtn')?.addEventListener('click', ()=> openModal(performanceForm(null), ()=>bindPerfSave(null)));
   document.querySelectorAll('[data-edit-perf]').forEach(el=> el.addEventListener('click', ()=> openModal(performanceForm(STATE.performance.find(p=>p.id===el.dataset.editPerf)), ()=>bindPerfSave(el.dataset.editPerf))));

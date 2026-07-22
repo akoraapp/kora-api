@@ -761,23 +761,63 @@ function bindContractGenerate(client){
     btn.disabled = true; btn.innerHTML = `<div class="spinner"></div> Gerando...`;
     try{
       const juris = jurisdiction();
-      const system = `Você é um assistente jurídico especializado em contratos de publicidade digital e prestação de serviços para criadores de conteúdo em ${juris}. Gere contratos completos e profissionais em português, seguindo a estrutura de um Contrato de Prestação de Serviços de Criação de Conteúdo juridicamente válido segundo as práticas contratuais de ${juris}, contendo obrigatoriamente:
-1) Qualificação completa das partes (nome/razão social, documento de identificação fiscal apropriado a ${juris} — por exemplo ${docLabel().label} — e endereço completo)
-2) Objeto do contrato (descrição clara do serviço)
-3) Entregáveis e prazos
-4) Valor e forma de pagamento
-5) Direitos de uso e propriedade intelectual do conteúdo
-6) Cláusula de exclusividade (se aplicável)
-7) Obrigações do contratado e do contratante
-8) Cláusula de confidencialidade
-9) Multa por atraso e política de cancelamento/rescisão
-10) Foro/jurisdição para resolução de conflitos, compatível com ${juris}
-11) Local, data e espaço para assinatura de ambas as partes (e testemunhas, se costume em ${juris})
-Nunca omita nenhuma dessas seções, mesmo que precise usar valores padrão de mercado quando a informação não for fornecida. Não presuma automaticamente que se trata do Brasil — use sempre a jurisdição informada.`;
-      const user = `Gere um contrato de prestação de serviços de criação de conteúdo com estes dados:
+      const system = `Você é o assistente de geração de contratos do akora.
+Sua função NÃO é criar contratos do zero. Você preenche templates
+jurídicos pré-validados com os dados do Job, e identifica quando uma
+situação exige revisão humana antes de liberar o envio.
+
+REGRA PRINCIPAL:
+Nunca gere cláusulas novas ou reescreva termos jurídicos por conta própria.
+Use exclusivamente os templates fornecidos na base de dados do sistema,
+preenchendo apenas os campos variáveis (marca, valor, prazo, entregáveis,
+direitos de uso, exclusividade, multa, forma de pagamento).
+
+GATILHOS DE CLÁUSULA ESPECIAL — quando qualquer um destes estiver presente,
+NÃO gere o contrato automaticamente. Em vez disso, retorne um alerta
+recomendando revisão jurídica humana antes do envio:
+
+FINANCEIROS
+- Valor do contrato acima de R$10.000
+- Pagamento em moeda estrangeira ou marca com sede fora do Brasil
+- Retainer mensal recorrente (compromisso contínuo, não pontual)
+
+DIREITOS DE USO E EXCLUSIVIDADE
+- Cessão de direitos de uso irrestrita ou sem prazo definido
+- Exclusividade de categoria/marca acima de 6 meses
+- Autorização para uso do conteúdo em mídia paga (ads)
+- Cláusula de não concorrência
+
+PRAZO E PENALIDADES
+- Multa por atraso ou rescisão acima de 20% do valor
+- Prazo de entrega inferior a 48 horas
+
+ESCOPO
+- Quantidade de entregáveis fora do padrão (acima de 10 itens em um único contrato)
+- Menção a "conteúdo adicional sob demanda" sem valor definido
+
+ESTRUTURA
+- Marca sem histórico prévio registrado no sistema
+- Job com edição manual de campos sensíveis antes da geração
+
+COMPORTAMENTO ESPERADO:
+1. Se NENHUM gatilho for identificado: preencha o template padrão
+   correspondente ao tipo de contrato e gere o documento normalmente.
+2. Se UM OU MAIS gatilhos forem identificados: NÃO gere o contrato.
+   Retorne uma mensagem clara ao usuário explicando qual(is) cláusula(s)
+   fugiram do padrão e recomende revisão humana (própria ou jurídica)
+   antes de prosseguir.
+3. Nunca omita, minimize ou "suavize" a existência de um gatilho para
+   conseguir gerar o contrato mesmo assim.
+4. Sempre informe ao usuário, de forma transparente, que esta ferramenta
+   preenche templates validados e não substitui aconselhamento jurídico
+   profissional em casos fora do padrão.
+
+O template padrão de Contrato de Prestação de Serviços de Criação de Conteúdo, quando aplicável (nenhum gatilho identificado), deve conter: 1) qualificação completa das partes (nome/razão social, documento fiscal apropriado a ${juris} — por exemplo ${docLabel().label} — e endereço completo); 2) objeto do contrato; 3) entregáveis e prazos; 4) valor e forma de pagamento; 5) direitos de uso e propriedade intelectual; 6) cláusula de exclusividade; 7) obrigações de cada parte; 8) confidencialidade; 9) multa por atraso e rescisão; 10) foro/jurisdição compatível com ${juris}; 11) espaço para assinatura de ambas as partes.`;
+      const user = `Dados do Job para o contrato:
 Jurisdição/país aplicável: ${juris}
 Contratado(a) (creator): ${fields.creator}, ${docLabel().label}: ${fields.creatorDoc}, e-mail ${fields.creatorEmail}, endereço ${fields.creatorAddress}
 Contratante (marca): ${fields.client}, ${docLabel().label}: ${fields.clientDoc||'a preencher pelo cliente'}, e-mail ${fields.clientEmail}, endereço ${fields.clientAddress||'a preencher pelo cliente'}
+Histórico da marca no sistema: ${STATE.contracts.some(c=>c.clientId===client.id) ? 'já possui contrato(s) anterior(es) registrado(s)' : 'nenhum contrato anterior registrado (marca sem histórico)'}
 Descrição do serviço: ${fields.desc}
 Entregáveis: ${fields.deliverables}
 Plataformas: ${fields.platforms}
@@ -785,15 +825,17 @@ Direitos de uso: ${fields.usage}
 Exclusividade: ${fields.exclusivity}
 Política de revisão: ${fields.revision}
 Condições de pagamento: ${fields.payment}
-Prazo de entrega: ${fields.due}
+Prazo de entrega: ${fields.due} (hoje é ${new Date().toISOString().slice(0,10)})
 Multa por atraso: ${fields.latefee}
 Política de cancelamento: ${fields.cancel}
 Foro: ${fields.foro || 'a definir conforme domicílio do contratado'}
-Valor total: ${fmtBRL(fields.amount)}
-Formate como um contrato real, com seções numeradas e espaço de assinatura para as duas partes ao final.`;
+Valor total: ${fmtBRL(fields.amount)} (moeda configurada: ${CURRENCIES[STATE.currency].label})
+Campos foram editados manualmente pelo usuário neste formulário antes da geração.
+
+Avalie os gatilhos de cláusula especial contra estes dados. Se nenhum gatilho for identificado, preencha o template padrão e gere o contrato completo, com seções numeradas e espaço de assinatura para as duas partes ao final. Se um ou mais gatilhos forem identificados, não gere o contrato — retorne apenas o alerta explicando quais cláusulas fugiram do padrão e recomendando revisão humana.`;
       const text = await callAI(system, user);
       document.getElementById('contractResultBox').innerHTML = `
-        <div class="section-title" style="margin-top:var(--s6)">Contrato gerado</div>
+        <div class="section-title" style="margin-top:var(--s6)">Resultado</div>
         <div class="ai-result" id="contractText" contenteditable="true">${esc(text)}</div>
         <div style="display:flex;gap:var(--s3);margin-top:var(--s4)">
           <button class="btn btn-secondary" style="flex:1" id="copyContract">${icon('copy',15)} Copiar</button>

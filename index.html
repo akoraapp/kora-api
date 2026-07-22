@@ -744,6 +744,102 @@ function contractForm(client){
     <button class="btn btn-primary btn-block" id="genContractBtn">${icon('sparkles',16)} Gerar contrato com IA</button>
     <div id="contractResultBox"></div>`;
 }
+/* ---- Limites dos gatilhos de cláusula especial (ajustáveis) ---- */
+const LIMITE_VALOR = 10000;
+const LIMITE_EXCLUSIVIDADE_MESES = 6;
+const LIMITE_MULTA_PCT = 0.20;
+const LIMITE_PRAZO_HORAS = 48;
+const LIMITE_ENTREGAVEIS = 10;
+
+function parseExclusivityMonths(exclusivity){
+  if(!exclusivity || exclusivity === 'Nenhuma') return 0;
+  if(exclusivity === 'Categoria exclusiva') return Infinity; // sem prazo definido
+  const daysMatch = exclusivity.match(/(\d+)\s*dias?/i);
+  return daysMatch ? parseInt(daysMatch[1]) / 30 : 0;
+}
+
+/* Checagem determinística dos gatilhos de cláusula especial — roda em JS puro,
+   antes de qualquer chamada à IA, para que comparações numéricas e de data
+   nunca dependam de interpretação do modelo de linguagem. */
+function checkContractTriggers(job){
+  const triggers = [];
+
+  const amount = parseFloat(job.amount) || 0;
+  if(amount > LIMITE_VALOR){
+    triggers.push(`Valor do contrato (${fmtBRL(amount)}) acima do limite de ${fmtCur(LIMITE_VALOR,'BRL')}`);
+  }
+
+  // Não há campo de país por marca no cadastro — a moeda configurada é usada como proxy.
+  if(STATE.currency !== 'BRL'){
+    triggers.push(`Pagamento em moeda estrangeira (${CURRENCIES[STATE.currency].label}) ou marca com sede fora do Brasil`);
+  }
+
+  if(/retainer|recorrente|mensal/i.test(job.payment||'')){
+    triggers.push('Forma de pagamento indica retainer mensal recorrente (compromisso contínuo, não pontual)');
+  }
+
+  if(job.usage === 'Buyout total'){
+    triggers.push('Direitos de uso irrestritos (buyout total), sem prazo de uso definido');
+  }
+
+  if(parseExclusivityMonths(job.exclusivity) > LIMITE_EXCLUSIVIDADE_MESES){
+    triggers.push(`Exclusividade de marca/categoria (${job.exclusivity}) acima de ${LIMITE_EXCLUSIVIDADE_MESES} meses`);
+  }
+
+  if(job.usage === 'Uso pago (ads)' || job.usage === 'Buyout total'){
+    triggers.push('Autorização para uso do conteúdo em mídia paga (ads)');
+  }
+
+  const freeText = [job.desc, job.deliverables, job.revision, job.payment, job.cancel].join(' ').toLowerCase();
+  if(/n[ãa]o[- ]concorr[êe]ncia|non-compete/.test(freeText)){
+    triggers.push('Cláusula de não concorrência mencionada');
+  }
+
+  const lateFeeMatch = (job.latefee||'').match(/(\d+(?:[.,]\d+)?)\s*%/);
+  if(lateFeeMatch){
+    const pct = parseFloat(lateFeeMatch[1].replace(',','.')) / 100;
+    if(pct > LIMITE_MULTA_PCT){
+      triggers.push(`Multa por atraso/rescisão de ${lateFeeMatch[1]}% — acima de ${LIMITE_MULTA_PCT*100}% do valor`);
+    }
+  }
+
+  if(job.due){
+    const diffHours = (new Date(job.due+'T00:00:00') - new Date()) / 36e5;
+    if(diffHours < LIMITE_PRAZO_HORAS){
+      triggers.push(`Prazo de entrega muito curto (menos de ${LIMITE_PRAZO_HORAS}h)`);
+    }
+  }
+
+  const deliverMatch = (job.deliverables||'').match(/(\d+)/);
+  if(deliverMatch && parseInt(deliverMatch[1]) > LIMITE_ENTREGAVEIS){
+    triggers.push(`Quantidade de entregáveis (${deliverMatch[1]}) acima do padrão (${LIMITE_ENTREGAVEIS} itens)`);
+  }
+
+  // "Job Completed" equivale, neste app, a já existir ao menos um contrato salvo para a marca.
+  if(!STATE.contracts.some(c=>c.clientId===job.clientId)){
+    triggers.push('Marca sem histórico de contrato anterior registrado no sistema');
+  }
+
+  // Edição manual de campos sensíveis não é rastreada no estado do formulário atual — não avaliado.
+
+  return triggers;
+}
+
+function contractReviewAlert(triggers){
+  return `
+    <div class="card" style="border-color:var(--coral-200);background:var(--coral-50);margin-top:var(--s5)">
+      <div class="list-item" style="border-bottom:none">
+        <div class="list-icon" style="background:#fff;color:var(--coral-600)">${icon('bell',18)}</div>
+        <div style="flex:1"><div class="list-title" style="color:var(--coral-800)">Revisão jurídica recomendada antes do envio</div>
+        <div class="list-sub" style="color:var(--coral-800)">Este contrato saiu do padrão coberto pelos templates pré-validados. Ele não foi gerado.</div></div>
+      </div>
+      <div style="margin-top:var(--s3);padding-top:var(--s3);border-top:1px solid var(--coral-200)">
+        ${triggers.map(t=>`<div style="font-size:13px;color:var(--brown-800);padding:4px 0">• ${esc(t)}</div>`).join('')}
+      </div>
+      <div class="field-hint" style="margin-top:var(--s4);color:var(--brown-500)">Esta ferramenta preenche templates jurídicos pré-validados para casos padrão. Para as cláusulas acima, recomendamos revisão sua ou de um(a) advogado(a) antes de prosseguir — ela não substitui aconselhamento jurídico profissional fora do padrão.</div>
+    </div>`;
+}
+
 function bindContractGenerate(client){
   document.getElementById('genContractBtn').addEventListener('click', async ()=>{
     const btn = document.getElementById('genContractBtn');
@@ -758,66 +854,22 @@ function bindContractGenerate(client){
     if(!fields.creatorDoc || !fields.creatorAddress){ showToast(`${docLabel().label} e endereço são obrigatórios para o contrato ser válido`); return; }
     STATE.profile = { name: fields.creator, doc: fields.creatorDoc, email: fields.creatorEmail, address: fields.creatorAddress };
     await save('profile');
+
+    const job = { ...fields, clientId: client.id };
+    const triggers = checkContractTriggers(job);
+    if(triggers.length){
+      document.getElementById('contractResultBox').innerHTML = contractReviewAlert(triggers);
+      return;
+    }
+
     btn.disabled = true; btn.innerHTML = `<div class="spinner"></div> Gerando...`;
     try{
       const juris = jurisdiction();
-      const system = `Você é o assistente de geração de contratos do akora.
-Sua função NÃO é criar contratos do zero. Você preenche templates
-jurídicos pré-validados com os dados do Job, e identifica quando uma
-situação exige revisão humana antes de liberar o envio.
-
-REGRA PRINCIPAL:
-Nunca gere cláusulas novas ou reescreva termos jurídicos por conta própria.
-Use exclusivamente os templates fornecidos na base de dados do sistema,
-preenchendo apenas os campos variáveis (marca, valor, prazo, entregáveis,
-direitos de uso, exclusividade, multa, forma de pagamento).
-
-GATILHOS DE CLÁUSULA ESPECIAL — quando qualquer um destes estiver presente,
-NÃO gere o contrato automaticamente. Em vez disso, retorne um alerta
-recomendando revisão jurídica humana antes do envio:
-
-FINANCEIROS
-- Valor do contrato acima de R$10.000
-- Pagamento em moeda estrangeira ou marca com sede fora do Brasil
-- Retainer mensal recorrente (compromisso contínuo, não pontual)
-
-DIREITOS DE USO E EXCLUSIVIDADE
-- Cessão de direitos de uso irrestrita ou sem prazo definido
-- Exclusividade de categoria/marca acima de 6 meses
-- Autorização para uso do conteúdo em mídia paga (ads)
-- Cláusula de não concorrência
-
-PRAZO E PENALIDADES
-- Multa por atraso ou rescisão acima de 20% do valor
-- Prazo de entrega inferior a 48 horas
-
-ESCOPO
-- Quantidade de entregáveis fora do padrão (acima de 10 itens em um único contrato)
-- Menção a "conteúdo adicional sob demanda" sem valor definido
-
-ESTRUTURA
-- Marca sem histórico prévio registrado no sistema
-- Job com edição manual de campos sensíveis antes da geração
-
-COMPORTAMENTO ESPERADO:
-1. Se NENHUM gatilho for identificado: preencha o template padrão
-   correspondente ao tipo de contrato e gere o documento normalmente.
-2. Se UM OU MAIS gatilhos forem identificados: NÃO gere o contrato.
-   Retorne uma mensagem clara ao usuário explicando qual(is) cláusula(s)
-   fugiram do padrão e recomende revisão humana (própria ou jurídica)
-   antes de prosseguir.
-3. Nunca omita, minimize ou "suavize" a existência de um gatilho para
-   conseguir gerar o contrato mesmo assim.
-4. Sempre informe ao usuário, de forma transparente, que esta ferramenta
-   preenche templates validados e não substitui aconselhamento jurídico
-   profissional em casos fora do padrão.
-
-O template padrão de Contrato de Prestação de Serviços de Criação de Conteúdo, quando aplicável (nenhum gatilho identificado), deve conter: 1) qualificação completa das partes (nome/razão social, documento fiscal apropriado a ${juris} — por exemplo ${docLabel().label} — e endereço completo); 2) objeto do contrato; 3) entregáveis e prazos; 4) valor e forma de pagamento; 5) direitos de uso e propriedade intelectual; 6) cláusula de exclusividade; 7) obrigações de cada parte; 8) confidencialidade; 9) multa por atraso e rescisão; 10) foro/jurisdição compatível com ${juris}; 11) espaço para assinatura de ambas as partes.`;
-      const user = `Dados do Job para o contrato:
+      const system = `Você é o assistente de geração de contratos do akora. A triagem de risco (gatilhos de cláusula especial) já foi feita antes desta chamada — os dados a seguir já foram aprovados para geração automática. Sua única função é preencher o template padrão de Contrato de Prestação de Serviços de Criação de Conteúdo com os dados do Job fornecidos, sem criar cláusulas novas nem alterar os termos jurídicos padrão. O contrato deve conter, nesta ordem: 1) qualificação completa das partes (nome/razão social, documento fiscal apropriado a ${juris} — por exemplo ${docLabel().label} — e endereço completo); 2) objeto do contrato; 3) entregáveis e prazos; 4) valor e forma de pagamento; 5) direitos de uso e propriedade intelectual; 6) cláusula de exclusividade; 7) obrigações de cada parte; 8) confidencialidade; 9) multa por atraso e rescisão; 10) foro/jurisdição compatível com ${juris}; 11) espaço para assinatura de ambas as partes. Formate como um contrato real, com seções numeradas.`;
+      const user = `Preencha o template com estes dados do Job:
 Jurisdição/país aplicável: ${juris}
 Contratado(a) (creator): ${fields.creator}, ${docLabel().label}: ${fields.creatorDoc}, e-mail ${fields.creatorEmail}, endereço ${fields.creatorAddress}
 Contratante (marca): ${fields.client}, ${docLabel().label}: ${fields.clientDoc||'a preencher pelo cliente'}, e-mail ${fields.clientEmail}, endereço ${fields.clientAddress||'a preencher pelo cliente'}
-Histórico da marca no sistema: ${STATE.contracts.some(c=>c.clientId===client.id) ? 'já possui contrato(s) anterior(es) registrado(s)' : 'nenhum contrato anterior registrado (marca sem histórico)'}
 Descrição do serviço: ${fields.desc}
 Entregáveis: ${fields.deliverables}
 Plataformas: ${fields.platforms}
@@ -825,17 +877,14 @@ Direitos de uso: ${fields.usage}
 Exclusividade: ${fields.exclusivity}
 Política de revisão: ${fields.revision}
 Condições de pagamento: ${fields.payment}
-Prazo de entrega: ${fields.due} (hoje é ${new Date().toISOString().slice(0,10)})
+Prazo de entrega: ${fields.due}
 Multa por atraso: ${fields.latefee}
 Política de cancelamento: ${fields.cancel}
 Foro: ${fields.foro || 'a definir conforme domicílio do contratado'}
-Valor total: ${fmtBRL(fields.amount)} (moeda configurada: ${CURRENCIES[STATE.currency].label})
-Campos foram editados manualmente pelo usuário neste formulário antes da geração.
-
-Avalie os gatilhos de cláusula especial contra estes dados. Se nenhum gatilho for identificado, preencha o template padrão e gere o contrato completo, com seções numeradas e espaço de assinatura para as duas partes ao final. Se um ou mais gatilhos forem identificados, não gere o contrato — retorne apenas o alerta explicando quais cláusulas fugiram do padrão e recomendando revisão humana.`;
+Valor total: ${fmtBRL(fields.amount)}`;
       const text = await callAI(system, user);
       document.getElementById('contractResultBox').innerHTML = `
-        <div class="section-title" style="margin-top:var(--s6)">Resultado</div>
+        <div class="section-title" style="margin-top:var(--s6)">Contrato gerado</div>
         <div class="ai-result" id="contractText" contenteditable="true">${esc(text)}</div>
         <div style="display:flex;gap:var(--s3);margin-top:var(--s4)">
           <button class="btn btn-secondary" style="flex:1" id="copyContract">${icon('copy',15)} Copiar</button>

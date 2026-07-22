@@ -751,6 +751,22 @@ const LIMITE_MULTA_PCT = 0.20;
 const LIMITE_PRAZO_HORAS = 48;
 const LIMITE_ENTREGAVEIS = 10;
 
+/* ---- Rastreamento de edição manual dos campos sensíveis do Job ---- */
+const CONTRACT_JOB_FIELD_IDS = ['ct-amount','ct-due','ct-deliverables','ct-usage','ct-exclusivity','ct-latefee'];
+let formEditedManually = false;
+function bindContractFormTracking(){
+  // Novo Job carregado no formulário (modal recém-aberto) — o preenchimento
+  // inicial (via template string em contractForm) não passa por aqui e não
+  // dispara 'input'/'change', então resetar aqui não perde nenhuma edição real.
+  formEditedManually = false;
+  CONTRACT_JOB_FIELD_IDS.forEach(id=>{
+    const el = document.getElementById(id);
+    if(!el) return;
+    const evtName = el.tagName === 'SELECT' ? 'change' : 'input';
+    el.addEventListener(evtName, ()=>{ formEditedManually = true; });
+  });
+}
+
 function parseExclusivityMonths(exclusivity){
   if(!exclusivity || exclusivity === 'Nenhuma') return 0;
   if(exclusivity === 'Categoria exclusiva') return Infinity; // sem prazo definido
@@ -820,7 +836,9 @@ function checkContractTriggers(job){
     triggers.push('Marca sem histórico de contrato anterior registrado no sistema');
   }
 
-  // Edição manual de campos sensíveis não é rastreada no estado do formulário atual — não avaliado.
+  if(formEditedManually){
+    triggers.push('Campos do contrato foram alterados manualmente antes da geração');
+  }
 
   return triggers;
 }
@@ -841,6 +859,7 @@ function contractReviewAlert(triggers){
 }
 
 function bindContractGenerate(client){
+  bindContractFormTracking();
   document.getElementById('genContractBtn').addEventListener('click', async ()=>{
     const btn = document.getElementById('genContractBtn');
     const fields = {

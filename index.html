@@ -228,7 +228,7 @@ const ICONS = {
 function icon(name, size=20, color='currentColor'){ return `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="${color}" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${ICONS[name]||''}</svg>`; }
 
 /* ---------- State ---------- */
-let STATE = { clients:[], content:[], ideas:[], transactions:[], tiktok:[], contracts:[], estimates:[], performance:[], referrals:[], profile:{}, language:'pt', currency:'BRL', goal:20000, referralCode:'', tab:'home', clientDetailId:null, financeSub:'geral', tiktokSub:'produtos', moreView:null };
+let STATE = { clients:[], content:[], ideas:[], transactions:[], tiktok:[], contracts:[], estimates:[], performance:[], referrals:[], feature_interest_content_approval:[], profile:{}, language:'pt', currency:'BRL', goal:20000, referralCode:'', tab:'home', clientDetailId:null, financeSub:'geral', tiktokSub:'produtos', moreView:null };
 const CURRENCIES = { BRL:{symbol:'R$', label:'Real (BRL)'}, USD:{symbol:'$', label:'Dólar (USD)'}, CAD:{symbol:'C$', label:'Dólar canadense (CAD)'}, EUR:{symbol:'€', label:'Euro (EUR)'}, GBP:{symbol:'£', label:'Libra (GBP)'}, MXN:{symbol:'$', label:'Peso mexicano (MXN)'}, ARS:{symbol:'$', label:'Peso argentino (ARS)'} };
 const DOC_LABELS = {
   BRL: { label:'CPF ou CNPJ', placeholder:'000.000.000-00 ou 00.000.000/0001-00' },
@@ -316,7 +316,7 @@ function uid(){ return Date.now().toString(36)+Math.random().toString(36).slice(
 
 /* ---------- Storage ---------- */
 async function loadAll(){
-  for(const key of ['clients','content','ideas','transactions','tiktok','contracts','estimates','performance','referrals']){
+  for(const key of ['clients','content','ideas','transactions','tiktok','contracts','estimates','performance','referrals','feature_interest_content_approval']){
     try{ const res = await window.storage.get('akora:'+key); STATE[key] = res ? JSON.parse(res.value) : []; }
     catch(e){ STATE[key] = []; }
   }
@@ -978,6 +978,7 @@ function contentFluxo(){
         <div style="flex:1">
           <div class="list-title">${esc(c.title)}</div>
           <div class="list-sub">${esc(c.platform||'')}${c.client?(' · '+esc(c.client)):''}${c.dueDate?(' · '+fmtDate(c.dueDate)):''}</div>
+          ${c.status==='Enviado' ? `<button class="btn btn-secondary btn-sm" style="margin-top:6px" data-approval-interest="${c.id}">${icon('lightbulb',12)} Aprovação dentro da plataforma (em breve)</button>` : ''}
         </div>
         <select class="quick-status" data-quickstatus-main="${c.id}" style="font-size:11px;padding:5px 6px;border-radius:8px;border:1px solid var(--border);color:var(--text-secondary);max-width:110px">${STATUS_CONTENT.map(s=>`<option ${c.status===s?'selected':''}>${s}</option>`).join('')}</select>
         <div class="swipe-row"><div class="icon-action" data-edit-content="${c.id}">${icon('pencil',16)}</div><div class="icon-action danger" data-del-content="${c.id}">${icon('trash',16)}</div></div>
@@ -1069,6 +1070,27 @@ function contentForm(existing, prefillDate){
     <div class="field"><label>Etapa</label><select id="f-cstatus">${STATUS_CONTENT.map(s=>`<option ${c.status===s?'selected':''}>${s}</option>`).join('')}</select></div>
     ${c.script ? `<div class="field"><label>Roteiro (gerado por IA)</label><textarea id="f-script" rows="4">${esc(c.script)}</textarea></div>` : `<input type="hidden" id="f-script" value="">`}
     <button class="btn btn-primary btn-block" id="saveContent">${existing?'Salvar alterações':'Adicionar conteúdo'}</button>`;
+}
+
+/* ---- Teste de porta falsa: aprovação de conteúdo dentro da plataforma ---- */
+// O app não tem autenticação multiusuário — o e-mail/nome do perfil é o identificador disponível para o creator atual.
+function currentUserId(){ return STATE.profile.email || STATE.profile.name || 'anônimo'; }
+function approvalInterestModal(contentId){
+  return `
+    <div class="modal-header"><div class="modal-title display">Aprovação dentro da plataforma</div><div class="icon-btn" id="closeModal">${icon('x',16)}</div></div>
+    <div class="secondary" style="font-size:14px;margin-bottom:var(--s6)">Estamos construindo aprovação de conteúdo direto no app, sem precisar de Drive ou WhatsApp. Quer ser avisado quando estiver disponível?</div>
+    <button class="btn btn-primary btn-block" id="approvalInterestConfirm" data-content-id="${contentId}">Sim, me avise</button>`;
+}
+function bindApprovalInterest(contentId){
+  document.getElementById('approvalInterestConfirm').addEventListener('click', async ()=>{
+    const userId = currentUserId();
+    const already = STATE.feature_interest_content_approval.some(r=>r.userId===userId && r.contentId===contentId);
+    if(!already){
+      STATE.feature_interest_content_approval.push({ id: uid(), userId, contentId, timestamp: new Date().toISOString() });
+      await save('feature_interest_content_approval');
+    }
+    closeModal(); showToast('Você será avisado(a) quando estiver disponível');
+  });
 }
 
 /* ---- Idea Bank ---- */
@@ -1542,7 +1564,30 @@ function screenSettings(){
         <div class="field-hint" style="margin-bottom:var(--s4)">Seus dados (nome, documento, endereço) são usados para preencher automaticamente os contratos gerados por IA. O idioma escolhido aqui muda os textos da Calculadora de Preço (Conteúdo → Preço). A tradução completa do restante do app chega em uma próxima etapa.</div>
         <button class="btn btn-primary" id="saveSettingsBtn">Salvar configurações</button>
       </div>
+      ${featureInterestAdminSection()}
     </main>`;
+}
+/* ---- View interna: interesse no teste de porta falsa de aprovação de conteúdo ---- */
+function featureInterestAdminSection(){
+  const entries = STATE.feature_interest_content_approval;
+  if(!entries.length) return '';
+  const byUser = {};
+  entries.forEach(r=>{ (byUser[r.userId] = byUser[r.userId]||[]).push(r); });
+  const uniqueUsers = Object.keys(byUser);
+  return `
+    <div class="section-title">Interesse: Aprovação de conteúdo (view interna)</div>
+    <div class="card">
+      <div class="stat-label" style="margin-bottom:var(--s2)">Cliques únicos (por usuário)</div>
+      <div class="display" style="font-size:26px;color:var(--brown-800);margin-bottom:var(--s4)">${uniqueUsers.length}</div>
+      ${uniqueUsers.map(userId=>{
+        const clicks = byUser[userId];
+        const last = clicks[clicks.length-1];
+        const content = STATE.content.find(c=>c.id===last.contentId);
+        return `<div class="list-item"><div class="list-icon">${icon('bell',18)}</div>
+          <div style="flex:1"><div class="list-title">${esc(userId)}</div><div class="list-sub">${clicks.length} interesse(s) registrado(s) · último em ${esc(content?content.title:'conteúdo removido')} · ${fmtDate(last.timestamp.slice(0,10))}</div></div>
+        </div>`;
+      }).join('')}
+    </div>`;
 }
 function settingsForm(){
   const p = STATE.profile;
@@ -1767,6 +1812,7 @@ function bindDynamic(){
   }));
   document.querySelectorAll('[data-edit-content]').forEach(el=> el.addEventListener('click', ()=> openModal(contentForm(STATE.content.find(c=>c.id===el.dataset.editContent)), ()=>bindContentSave(el.dataset.editContent))));
   document.querySelectorAll('[data-del-content]').forEach(el=> el.addEventListener('click', async ()=>{ STATE.content = STATE.content.filter(c=>c.id!==el.dataset.delContent); await save('content'); render(); showToast('Conteúdo removido'); }));
+  document.querySelectorAll('[data-approval-interest]').forEach(el=> el.addEventListener('click', ()=> openModal(approvalInterestModal(el.dataset.approvalInterest), ()=>bindApprovalInterest(el.dataset.approvalInterest))));
   document.querySelectorAll('[data-csub]').forEach(el=> el.addEventListener('click', ()=>{ contentSub = el.dataset.csub; render(); }));
   document.querySelectorAll('[data-gradefilter]').forEach(el=> el.addEventListener('click', ()=>{ gradeFilter = el.dataset.gradefilter; render(); }));
   document.querySelectorAll('[data-calnav]').forEach(el=> el.addEventListener('click', ()=>{

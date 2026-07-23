@@ -182,9 +182,15 @@
   .goal-card{ background:var(--brown-600); border-radius:20px; padding:var(--s5); color:#fff; cursor:pointer; margin-top:var(--s5); margin-bottom:var(--s4); transition:transform .2s ease; }
   .goal-card:hover{ transform:translateY(-1px); }
   .goal-card .top-row{ display:flex; align-items:center; justify-content:space-between; }
+  .auth-screen{ min-height:100vh; display:flex; align-items:center; justify-content:center; padding:var(--s6); }
+  .auth-card{ width:100%; max-width:400px; background:var(--card); border:1px solid var(--border); border-radius:20px; padding:var(--s7); }
+  .auth-brand{ font-family:'Playfair Display'; font-weight:700; font-size:24px; color:var(--brown-800); display:flex; align-items:center; gap:10px; margin-bottom:var(--s2); }
+  .auth-brand .dot{ width:10px; height:10px; border-radius:50%; background:var(--coral-500); }
+  .auth-error{ background:var(--coral-50); color:var(--coral-800); font-size:13px; padding:10px 14px; border-radius:10px; margin-bottom:var(--s4); }
 </style>
 </head>
 <body>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <div id="app">
   <nav class="sidebar" id="sidebarNav"></nav>
   <div id="main-area">
@@ -228,6 +234,12 @@ const ICONS = {
 function icon(name, size=20, color='currentColor'){ return `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="${color}" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${ICONS[name]||''}</svg>`; }
 
 /* ---------- State ---------- */
+/* ---------- Supabase (auth + Clientes/brands) ---------- */
+const SUPABASE_URL = 'https://ncvqezfmsulobiumyxfc.supabase.co';
+const SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_UBqeJZfHCRB74YzoDwsSDQ_HtoRM6xB';
+const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
+let AUTH = { session:null, workspaceId:null };
+
 let STATE = { clients:[], content:[], ideas:[], transactions:[], tiktok:[], contracts:[], estimates:[], performance:[], referrals:[], feature_interest_content_approval:[], profile:{}, language:'pt', currency:'BRL', goal:20000, referralCode:'', tab:'home', clientDetailId:null, financeSub:'geral', tiktokSub:'produtos', moreView:null };
 const CURRENCIES = { BRL:{symbol:'R$', label:'Real (BRL)'}, USD:{symbol:'$', label:'Dólar (USD)'}, CAD:{symbol:'C$', label:'Dólar canadense (CAD)'}, EUR:{symbol:'€', label:'Euro (EUR)'}, GBP:{symbol:'£', label:'Libra (GBP)'}, MXN:{symbol:'$', label:'Peso mexicano (MXN)'}, ARS:{symbol:'$', label:'Peso argentino (ARS)'} };
 const DOC_LABELS = {
@@ -316,7 +328,8 @@ function uid(){ return Date.now().toString(36)+Math.random().toString(36).slice(
 
 /* ---------- Storage ---------- */
 async function loadAll(){
-  for(const key of ['clients','content','ideas','transactions','tiktok','contracts','estimates','performance','referrals','feature_interest_content_approval']){
+  // 'clients' n\u00e3o entra nesse la\u00e7o \u2014 vem de verdade da tabela brands (ver loadClientsFromSupabase).
+  for(const key of ['content','ideas','transactions','tiktok','contracts','estimates','performance','referrals','feature_interest_content_approval']){
     try{ const res = await window.storage.get('akora:'+key); STATE[key] = res ? JSON.parse(res.value) : []; }
     catch(e){ STATE[key] = []; }
   }
@@ -331,6 +344,38 @@ async function loadAll(){
     STATE.referralCode = base + Math.random().toString(36).slice(2,6);
     await saveSettings();
   }
+  await loadClientsFromSupabase();
+}
+
+/* ---- Clientes (brands) \u2014 persist\u00eancia real via Supabase, escopada por workspace ---- */
+function mapBrandRow(row){
+  return { id: row.id, name: row.name||'', contact: row.email||'', phone: row.phone||'', instagram: row.instagram||'', dealPlatform: row.deal_platform||'', status: row.status||'Lead', notes: row.notes||'' };
+}
+async function loadClientsFromSupabase(){
+  if(!AUTH.workspaceId){ STATE.clients = []; return; }
+  const { data, error } = await sb.from('brands').select('*').eq('workspace_id', AUTH.workspaceId).order('created_at', { ascending:false });
+  if(error){ showToast('Erro ao carregar clientes: ' + error.message); STATE.clients = []; return; }
+  STATE.clients = (data||[]).map(mapBrandRow);
+}
+async function createClientInSupabase(data){
+  const { data: row, error } = await sb.from('brands').insert({
+    workspace_id: AUTH.workspaceId, name: data.name, email: data.contact, phone: data.phone,
+    instagram: data.instagram, deal_platform: data.dealPlatform, status: data.status, notes: data.notes,
+  }).select().single();
+  if(error) throw error;
+  return mapBrandRow(row);
+}
+async function updateClientInSupabase(id, data){
+  const { data: row, error } = await sb.from('brands').update({
+    name: data.name, email: data.contact, phone: data.phone, instagram: data.instagram,
+    deal_platform: data.dealPlatform, status: data.status, notes: data.notes,
+  }).eq('id', id).select().single();
+  if(error) throw error;
+  return mapBrandRow(row);
+}
+async function deleteClientInSupabase(id){
+  const { error } = await sb.from('brands').delete().eq('id', id);
+  if(error) throw error;
 }
 async function saveSettings(){
   try{ await window.storage.set('akora:settings', JSON.stringify({ language: STATE.language, currency: STATE.currency, goal: STATE.goal, referralCode: STATE.referralCode })); }
@@ -940,9 +985,11 @@ function confirmStatusModal(client, newStatus){
 function bindConfirmStatus(client, newStatus){
   document.getElementById('skipStatus').addEventListener('click', ()=>{ closeModal(); render(); showToast('Contrato salvo'); });
   document.getElementById('advanceStatus').addEventListener('click', async ()=>{
-    client.status = newStatus;
-    STATE.clients = STATE.clients.map(c=>c.id===client.id?client:c);
-    await save('clients'); closeModal(); render(); showToast('Cliente movido para '+newStatus);
+    try{
+      const saved = await updateClientInSupabase(client.id, { ...client, status: newStatus });
+      STATE.clients = STATE.clients.map(c=>c.id===client.id?saved:c);
+      closeModal(); render(); showToast('Cliente movido para '+newStatus);
+    }catch(e){ showToast('Erro ao atualizar cliente: ' + e.message); }
   });
 }
 
@@ -1564,6 +1611,13 @@ function screenSettings(){
         <div class="field-hint" style="margin-bottom:var(--s4)">Seus dados (nome, documento, endereço) são usados para preencher automaticamente os contratos gerados por IA. O idioma escolhido aqui muda os textos da Calculadora de Preço (Conteúdo → Preço). A tradução completa do restante do app chega em uma próxima etapa.</div>
         <button class="btn btn-primary" id="saveSettingsBtn">Salvar configurações</button>
       </div>
+      <div class="card">
+        <div class="list-item" style="border-bottom:none">
+          <div class="list-icon">${icon('users',18)}</div>
+          <div style="flex:1"><div class="list-title">Conta</div><div class="list-sub">${esc(AUTH.session?.user?.email||'')}</div></div>
+          <button class="btn btn-secondary btn-sm" id="signOutBtn">Sair</button>
+        </div>
+      </div>
       ${featureInterestAdminSection()}
     </main>`;
 }
@@ -1797,8 +1851,11 @@ function bindDynamic(){
   }));
   document.getElementById('editClientBtn')?.addEventListener('click', ()=> openModal(clientForm(STATE.clients.find(c=>c.id===STATE.clientDetailId)), ()=>bindClientSave(STATE.clientDetailId)));
   document.getElementById('delClientBtn')?.addEventListener('click', async ()=>{
-    STATE.clients = STATE.clients.filter(c=>c.id!==STATE.clientDetailId); await save('clients');
-    STATE.clientDetailId=null; render(); showToast('Cliente removido');
+    try{
+      await deleteClientInSupabase(STATE.clientDetailId);
+      STATE.clients = STATE.clients.filter(c=>c.id!==STATE.clientDetailId);
+      STATE.clientDetailId=null; render(); showToast('Cliente removido');
+    }catch(e){ showToast('Erro ao remover cliente: ' + e.message); }
   });
   document.getElementById('aiContractBtn')?.addEventListener('click', ()=>{
     const client = STATE.clients.find(c=>c.id===STATE.clientDetailId);
@@ -1866,6 +1923,7 @@ function bindDynamic(){
 
   // settings (top-level page)
   document.getElementById('saveSettingsBtn') && bindSettingsSave();
+  document.getElementById('signOutBtn')?.addEventListener('click', signOut);
 
   // performance & rewards (top-level pages)
   document.querySelectorAll('[data-perfplatform]').forEach(el=> el.addEventListener('click', ()=>{ perfPlatformFilter = el.dataset.perfplatform; render(); }));
@@ -1897,9 +1955,14 @@ document.getElementById('modalOverlay').addEventListener('click', e=>{ if(e.targ
 function bindClientSave(existingId){
   document.getElementById('saveClient').addEventListener('click', async ()=>{
     const name = val('f-name'); if(!name){ showToast('Informe o nome do cliente'); return; }
-    const data = { id: existingId || uid(), name, contact: val('f-contact'), phone: val('f-phone'), instagram: val('f-instagram'), dealPlatform: val('f-dealplatform'), status: val('f-status'), notes: val('f-notes') };
-    if(existingId){ STATE.clients = STATE.clients.map(c=>c.id===existingId?data:c); } else{ STATE.clients.push(data); }
-    await save('clients'); closeModal(); render(); showToast('Cliente salvo');
+    const data = { name, contact: val('f-contact'), phone: val('f-phone'), instagram: val('f-instagram'), dealPlatform: val('f-dealplatform'), status: val('f-status'), notes: val('f-notes') };
+    const btn = document.getElementById('saveClient');
+    btn.disabled = true;
+    try{
+      const saved = existingId ? await updateClientInSupabase(existingId, data) : await createClientInSupabase(data);
+      if(existingId){ STATE.clients = STATE.clients.map(c=>c.id===existingId?saved:c); } else{ STATE.clients.unshift(saved); }
+      closeModal(); render(); showToast('Cliente salvo');
+    }catch(e){ showToast('Erro ao salvar cliente: ' + e.message); btn.disabled = false; }
   });
 }
 function bindContentSave(existingId){
@@ -1955,7 +2018,7 @@ function bindTiktokSave(existingId){
 }
 
 /* ---------- FAB ---------- */
-document.getElementById('fabBtn').addEventListener('click', ()=>{
+function handleFabClick(){
   if(STATE.tab==='clients') openModal(clientForm(null), ()=>bindClientSave(null));
   else if(STATE.tab==='content') openModal(contentForm(null), ()=>bindContentSave(null));
   else if(STATE.tab==='finance'){
@@ -1963,10 +2026,101 @@ document.getElementById('fabBtn').addEventListener('click', ()=>{
     else openModal(financeForm(null), ()=>bindFinanceSave(null));
   }
   else openModal(clientForm(null), ()=>bindClientSave(null));
-});
+}
+document.getElementById('fabBtn').addEventListener('click', handleFabClick);
+
+/* ---------- Auth (Supabase) ---------- */
+let authMode = 'signin';
+function screenAuth(){
+  return `
+    <div class="auth-screen">
+      <div class="auth-card">
+        <div class="auth-brand"><span class="dot"></span> AKORA</div>
+        <div class="secondary" style="margin-bottom:var(--s6)">${authMode==='signin' ? 'Entre pra continuar.' : 'Crie sua conta pra começar.'}</div>
+        <div id="authErrorBox"></div>
+        <div class="field"><label>E-mail</label><input id="auth-email" type="email" placeholder="voce@email.com"></div>
+        <div class="field"><label>Senha</label><input id="auth-password" type="password" placeholder="Mínimo 6 caracteres"></div>
+        <button class="btn btn-primary btn-block" id="authSubmit" style="margin-bottom:var(--s3)">${authMode==='signin' ? 'Entrar' : 'Criar conta'}</button>
+        <div class="secondary" style="font-size:13px;text-align:center">${authMode==='signin' ? 'Não tem conta?' : 'Já tem conta?'} <a href="#" id="authToggle" style="color:var(--brown-600);font-weight:600">${authMode==='signin' ? 'Criar conta' : 'Entrar'}</a></div>
+      </div>
+    </div>`;
+}
+function renderAuthScreen(){
+  document.getElementById('app').innerHTML = screenAuth();
+  bindAuthScreen();
+}
+function bindAuthScreen(){
+  document.getElementById('authToggle').addEventListener('click', (e)=>{ e.preventDefault(); authMode = authMode==='signin' ? 'signup' : 'signin'; renderAuthScreen(); });
+  document.getElementById('authSubmit').addEventListener('click', async ()=>{
+    const email = val('auth-email'); const password = document.getElementById('auth-password').value;
+    const errorBox = document.getElementById('authErrorBox');
+    errorBox.innerHTML = '';
+    if(!email || !password){ errorBox.innerHTML = `<div class="auth-error">Preencha e-mail e senha</div>`; return; }
+    const btn = document.getElementById('authSubmit');
+    btn.disabled = true;
+    try{
+      if(authMode==='signin'){
+        const { error } = await sb.auth.signInWithPassword({ email, password });
+        if(error) throw error;
+        await bootstrapAfterAuth();
+      } else {
+        const { data, error } = await sb.auth.signUp({ email, password });
+        if(error) throw error;
+        if(data.session){
+          await bootstrapAfterAuth();
+        } else {
+          errorBox.innerHTML = `<div class="auth-error" style="background:#EAF3E9;color:var(--brown-800)">Conta criada! Se for pedida confirmação, verifique seu e-mail e depois entre.</div>`;
+          authMode = 'signin'; renderAuthScreen();
+          return;
+        }
+      }
+    }catch(e){ errorBox.innerHTML = `<div class="auth-error">${esc(e.message)}</div>`; }
+    btn.disabled = false;
+  });
+}
+async function ensureWorkspaceId(){
+  for(let attempt=0; attempt<5; attempt++){
+    const { data, error } = await sb.from('workspaces').select('id').eq('user_id', AUTH.session.user.id).limit(1).maybeSingle();
+    if(error){ showToast('Erro ao carregar workspace: ' + error.message); return; }
+    if(data){ AUTH.workspaceId = data.id; return; }
+    await new Promise(r=>setTimeout(r, 400)); // dá tempo pro trigger create_workspace_after_user rodar
+  }
+  showToast('Não foi possível carregar seu workspace. Tente recarregar a página.');
+}
+function restoreAppShell(){
+  document.getElementById('app').innerHTML = `
+    <nav class="sidebar" id="sidebarNav"></nav>
+    <div id="main-area">
+      <div id="screen-content"></div>
+      <button class="fab" id="fabBtn"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg></button>
+    </div>`;
+  document.getElementById('fabBtn').addEventListener('click', handleFabClick);
+}
+async function bootstrapAfterAuth(){
+  const { data:{ session } } = await sb.auth.getSession();
+  AUTH.session = session;
+  if(!session){ renderAuthScreen(); return; }
+  await ensureWorkspaceId();
+  restoreAppShell();
+  await loadAll();
+  render();
+}
+async function signOut(){
+  await sb.auth.signOut();
+  AUTH = { session:null, workspaceId:null };
+  authMode = 'signin';
+  renderAuthScreen();
+}
 
 /* ---------- Init ---------- */
-(async function init(){ await loadAll(); render(); })();
+(async function init(){
+  const { data:{ session } } = await sb.auth.getSession();
+  if(!session){ renderAuthScreen(); return; }
+  AUTH.session = session;
+  await ensureWorkspaceId();
+  await loadAll();
+  render();
+})();
 </script>
 </body>
 </html>

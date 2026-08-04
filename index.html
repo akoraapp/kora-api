@@ -187,6 +187,25 @@
   .auth-brand{ font-family:'Playfair Display'; font-weight:700; font-size:24px; color:var(--brown-800); display:flex; align-items:center; gap:10px; margin-bottom:var(--s2); }
   .auth-brand .dot{ width:10px; height:10px; border-radius:50%; background:var(--coral-500); }
   .auth-error{ background:var(--coral-50); color:var(--coral-800); font-size:13px; padding:10px 14px; border-radius:10px; margin-bottom:var(--s4); }
+
+  /* ---- Mídia Kit: página pública (standalone, sem sidebar) e preview embutido ---- */
+  .mk-page{ max-width:640px; margin:0 auto; padding:0 0 var(--s10); }
+  .mk-cover{ width:100%; height:180px; background:var(--surface) center/cover no-repeat; border-radius:0 0 24px 24px; }
+  .mk-header{ padding:0 var(--s6); margin-top:-40px; }
+  .mk-avatar{ width:88px; height:88px; border-radius:22px; background:var(--brown-600); color:#fff; display:flex; align-items:center; justify-content:center; font-family:'Playfair Display'; font-weight:700; font-size:32px; border:4px solid #fff; box-shadow:0 4px 16px rgba(45,28,25,0.12); }
+  .mk-name{ font-size:24px; margin-top:var(--s4); }
+  .mk-niche{ margin-top:2px; }
+  .mk-bio{ font-size:14px; color:var(--text-secondary); line-height:1.6; margin-top:var(--s3); }
+  .mk-section{ padding:0 var(--s6); margin-top:var(--s8); }
+  .mk-metrics{ display:grid; grid-template-columns:repeat(auto-fit,minmax(140px,1fr)); gap:var(--s3); }
+  .mk-empty{ text-align:center; padding:var(--s9) var(--s6); color:var(--text-muted); font-size:13px; }
+  .mk-cta{ position:sticky; bottom:0; background:linear-gradient(180deg,rgba(250,248,246,0),var(--bg) 30%); padding:var(--s6); display:flex; justify-content:center; }
+  @media print{
+    body *{ visibility:hidden; }
+    .mk-page, .mk-page *{ visibility:visible; }
+    .mk-page{ position:absolute; left:0; top:0; }
+    .mk-cta, .mk-no-print{ display:none !important; }
+  }
 </style>
 </head>
 <body>
@@ -230,6 +249,9 @@ const ICONS = {
   copy: `<rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>`,
   wand: `<path d="m15 4 1.5 1.5M4 20l9-9M8 3l1 3-3-1 1-3ZM19 13l1 3-3-1 1-3Z"/>`,
   calc: `<rect x="4" y="2" width="16" height="20" rx="2"/><line x1="8" y1="7" x2="16" y2="7"/><line x1="8" y1="12" x2="8" y2="12"/><line x1="12" y1="12" x2="12" y2="12"/><line x1="16" y1="12" x2="16" y2="12"/><line x1="8" y1="16" x2="8" y2="16"/><line x1="12" y1="16" x2="12" y2="16"/><line x1="16" y1="16" x2="16" y2="16"/>`,
+  badge: `<rect x="3" y="4" width="18" height="16" rx="3"/><circle cx="9" cy="10" r="2.2"/><path d="M6 17c0-1.8 1.5-3 3-3s3 1.2 3 3M14 9h4M14 13h4"/>`,
+  link: `<path d="M9 17H7a5 5 0 0 1 0-10h2M15 7h2a5 5 0 0 1 0 10h-2M8 12h8"/>`,
+  download: `<path d="M12 3v12M7 10l5 5 5-5"/><path d="M4 21h16"/>`,
 };
 function icon(name, size=20, color='currentColor'){ return `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="${color}" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${ICONS[name]||''}</svg>`; }
 
@@ -240,7 +262,7 @@ const SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_UBqeJZfHCRB74YzoDwsSDQ_HtoRM6xB
 const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
 let AUTH = { session:null, workspaceId:null };
 
-let STATE = { clients:[], content:[], ideas:[], transactions:[], tiktok:[], contracts:[], estimates:[], performance:[], referrals:[], feature_interest_content_approval:[], profile:{}, language:'pt', currency:'BRL', goal:20000, referralCode:'', tab:'home', clientDetailId:null, financeSub:'geral', tiktokSub:'produtos', moreView:null };
+let STATE = { clients:[], content:[], ideas:[], transactions:[], tiktok:[], contracts:[], estimates:[], performance:[], referrals:[], feature_interest_content_approval:[], profile:{}, userProfile:{}, mediaKit:null, language:'pt', currency:'BRL', goal:20000, referralCode:'', tab:'home', clientDetailId:null, financeSub:'geral', tiktokSub:'produtos', moreView:null };
 const CURRENCIES = { BRL:{symbol:'R$', label:'Real (BRL)'}, USD:{symbol:'$', label:'Dólar (USD)'}, CAD:{symbol:'C$', label:'Dólar canadense (CAD)'}, EUR:{symbol:'€', label:'Euro (EUR)'}, GBP:{symbol:'£', label:'Libra (GBP)'}, MXN:{symbol:'$', label:'Peso mexicano (MXN)'}, ARS:{symbol:'$', label:'Peso argentino (ARS)'} };
 const DOC_LABELS = {
   BRL: { label:'CPF ou CNPJ', placeholder:'000.000.000-00 ou 00.000.000/0001-00' },
@@ -305,6 +327,7 @@ const NAV = [
   { id:'content', label:'Conteúdo', icon:'calendar' },
   { id:'finance', label:'Financeiro', icon:'dollar' },
   { id:'performance', label:'Performance', icon:'briefcase' },
+  { id:'mediakit', label:'Mídia Kit', icon:'badge' },
   { id:'rewards', label:'Creator Rewards', icon:'gift' },
   { id:'settings', label:'Configurações', icon:'settings' },
 ];
@@ -350,6 +373,8 @@ async function loadAll(){
   await loadTiktokFromSupabase();
   await loadEstimatesFromSupabase();
   await loadFeatureInterestFromSupabase();
+  await loadUserProfileFromSupabase();
+  await loadMediaKitFromSupabase();
 }
 
 /* ---- Clientes (brands) \u2014 persist\u00eancia real via Supabase, escopada por workspace ---- */
@@ -624,6 +649,65 @@ async function createEstimateInSupabase(data){
   }).select().single();
   if(error) throw error;
   return mapEstimateRow(row);
+}
+
+/* ---- Perfil público do creator (users.name/avatar_url/bio/niche/contact) ----
+   Separado do STATE.profile (nome legal + documento fiscal usados nos contratos,
+   que seguem em window.storage): este é o perfil público exibido no Mídia Kit. */
+function mapUserProfileRow(row){
+  return { name: row.name||row.full_name||'', avatarUrl: row.avatar_url||'', bio: row.bio||'', niche: row.niche||'', contact: row.contact||'' };
+}
+async function loadUserProfileFromSupabase(){
+  if(!AUTH.session){ STATE.userProfile = {}; return; }
+  const { data, error } = await sb.from('users').select('*').eq('id', AUTH.session.user.id).maybeSingle();
+  if(error || !data){ STATE.userProfile = {}; return; }
+  STATE.userProfile = mapUserProfileRow(data);
+}
+async function updateUserProfileInSupabase(data){
+  const { data: row, error } = await sb.from('users').update({
+    name: data.name, avatar_url: data.avatarUrl, bio: data.bio, niche: data.niche, contact: data.contact,
+  }).eq('id', AUTH.session.user.id).select().single();
+  if(error) throw error;
+  return mapUserProfileRow(row);
+}
+
+/* ---- Mídia Kit (media_kit) — persistência real via Supabase ---- */
+function mapMediaKitRow(row){
+  return { id: row.id, bioExtendida: row.bio_extendida||'', fotoCapaUrl: row.foto_capa_url||'', publicoFaixaEtaria: row.publico_faixa_etaria||'', publicoGenero: row.publico_genero||'', publicoLocalizacao: row.publico_localizacao||'', casesExtra: row.cases_extra||[], slug: row.slug||'' };
+}
+async function loadMediaKitFromSupabase(){
+  if(!AUTH.workspaceId){ STATE.mediaKit = null; return; }
+  const { data, error } = await sb.from('media_kit').select('*').eq('workspace_id', AUTH.workspaceId).maybeSingle();
+  if(error){ STATE.mediaKit = null; return; }
+  STATE.mediaKit = data ? mapMediaKitRow(data) : null;
+}
+async function saveMediaKitInSupabase(data){
+  const payload = {
+    workspace_id: AUTH.workspaceId, bio_extendida: data.bioExtendida, foto_capa_url: data.fotoCapaUrl,
+    publico_faixa_etaria: data.publicoFaixaEtaria, publico_genero: data.publicoGenero, publico_localizacao: data.publicoLocalizacao,
+    cases_extra: data.casesExtra||[], slug: data.slug||null, updated_at: new Date().toISOString(),
+  };
+  const { data: row, error } = await sb.from('media_kit').upsert(payload, { onConflict:'workspace_id' }).select().single();
+  if(error) throw error;
+  return mapMediaKitRow(row);
+}
+function slugify(text){
+  return (text||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^a-z0-9]+/g,'-').replace(/^-+|-+$/g,'').slice(0,40);
+}
+async function saveMediaKitWithSlugFallback(data){
+  let attempt = { ...data };
+  for(let i=0;i<5;i++){
+    try{ return await saveMediaKitInSupabase(attempt); }
+    catch(e){
+      if(e.code==='23505' && i<4){ attempt = { ...attempt, slug: `${slugify(data.slug)}-${Math.random().toString(36).slice(2,5)}` }; continue; }
+      throw e;
+    }
+  }
+}
+async function fetchPublicMediaKit(slug){
+  const { data, error } = await sb.rpc('get_media_kit_public', { p_slug: slug });
+  if(error) throw error;
+  return data;
 }
 
 async function saveSettings(){
@@ -2067,17 +2151,201 @@ function bindReferralSave(){
   });
 }
 
+/* ---------- Mídia Kit ---------- */
+function mkContactHref(contact){
+  if(!contact) return null;
+  const c = contact.trim();
+  if(/^https?:\/\//i.test(c)) return c;
+  if(/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(c)) return 'mailto:'+c;
+  const digits = c.replace(/\D/g,'');
+  if(digits.length>=8) return 'https://wa.me/'+digits;
+  return null;
+}
+function mkPublicUrl(slug){ return `${location.origin}${location.pathname}?mediakit=${encodeURIComponent(slug)}`; }
+function computeEngagementPct(m){
+  const interactions = Number(m.likes||0)+Number(m.comments||0)+Number(m.shares||0)+Number(m.saves||0);
+  return Number(m.views)>0 ? (interactions/Number(m.views)*100) : 0;
+}
+function computeLatestMetricsByPlatform(list){
+  const byPlatform = {};
+  [...list].sort((a,b)=> (a.date||'').localeCompare(b.date||'')).forEach(m=>{ byPlatform[m.platform] = m; });
+  return Object.values(byPlatform);
+}
+// Um único renderer para a página pública E o preview dentro do app — o export em PDF
+// (window.print na página pública) usa exatamente este HTML, sem template separado.
+function renderMediaKitMarkup(data, opts){
+  opts = opts || {};
+  const p = data.profile||{}, kit = data.kit||{};
+  const bioText = kit.bioExtendida || p.bio || '';
+  const metrics = data.metrics||[];
+  const cases = [ ...(data.cases||[]), ...((kit.casesExtra)||[]).filter(c=>c.marca).map(c=>({ name:c.marca, notes:c.descricao })) ];
+  const packages = data.packages||[];
+  const hasDemografia = kit.publicoFaixaEtaria || kit.publicoGenero || kit.publicoLocalizacao;
+  const contactHref = mkContactHref(p.contact);
+  return `
+    <div class="mk-page">
+      <div class="mk-cover" style="${kit.fotoCapaUrl?`background-image:url('${esc(kit.fotoCapaUrl)}')`:''}"></div>
+      <div class="mk-header">
+        ${p.avatarUrl ? `<img src="${esc(p.avatarUrl)}" class="mk-avatar" style="object-fit:cover" alt="">` : `<div class="mk-avatar">${esc((p.name||'C').charAt(0).toUpperCase())}</div>`}
+        <div class="mk-name display">${esc(p.name||'Creator')}</div>
+        ${p.niche ? `<div class="mk-niche"><span class="badge badge-producao">${esc(p.niche)}</span></div>` : ''}
+        ${bioText ? `<div class="mk-bio">${esc(bioText)}</div>` : ''}
+      </div>
+      <div class="mk-section">
+        <div class="section-title" style="margin-top:0">Métricas</div>
+        ${metrics.length ? `<div class="mk-metrics">${metrics.map(m=>`
+          <div class="stat-card"><div class="stat-label">${esc(m.platform)}</div>
+            <div class="stat-value">${Number(m.followers||0).toLocaleString('pt-BR')}</div>
+            <div class="stat-delta" style="color:var(--text-secondary)">${Number(m.views||0).toLocaleString('pt-BR')} views · ${computeEngagementPct(m).toFixed(1)}% engaj.</div>
+          </div>`).join('')}</div>` : `<div class="mk-empty">Métricas ainda não registradas em Performance.</div>`}
+      </div>
+      ${hasDemografia ? `
+      <div class="mk-section">
+        <div class="section-title" style="margin-top:0">Público</div>
+        <div class="card">
+          ${kit.publicoFaixaEtaria ? `<div class="list-item"><div class="list-title">Faixa etária</div><div class="list-right">${esc(kit.publicoFaixaEtaria)}</div></div>` : ''}
+          ${kit.publicoGenero ? `<div class="list-item"><div class="list-title">Gênero</div><div class="list-right">${esc(kit.publicoGenero)}</div></div>` : ''}
+          ${kit.publicoLocalizacao ? `<div class="list-item"><div class="list-title">Localização</div><div class="list-right">${esc(kit.publicoLocalizacao)}</div></div>` : ''}
+        </div>
+      </div>` : ''}
+      <div class="mk-section">
+        <div class="section-title" style="margin-top:0">Cases</div>
+        ${cases.length ? `<div class="card">${cases.map(c=>`
+          <div class="list-item"><div class="list-icon">${icon('briefcase',18)}</div>
+            <div style="flex:1"><div class="list-title">${esc(c.name)}</div>${c.notes?`<div class="list-sub">${esc(c.notes)}</div>`:''}</div>
+          </div>`).join('')}</div>` : `<div class="mk-empty">Nenhum case cadastrado ainda.</div>`}
+      </div>
+      <div class="mk-section">
+        <div class="section-title" style="margin-top:0">Pacotes</div>
+        ${packages.length ? `<div class="card">${packages.map(pk=>`
+          <div class="list-item"><div style="flex:1"><div class="list-title">${esc(pk.style)} · ${esc(pk.platform)}</div><div class="list-sub">${esc(pk.qty)}</div></div><div class="list-right" style="font-weight:700;color:var(--brown-800)">${fmtCur(pk.total, pk.currency)}</div></div>`).join('')}</div>` : `<div class="mk-empty">Nenhum pacote salvo ainda — use Conteúdo → Preço → "Salvar Estimativa".</div>`}
+      </div>
+      ${opts.isPublic ? `
+      <div class="mk-cta">
+        <div style="display:flex;gap:var(--s3)">
+          ${contactHref ? `<a class="btn btn-primary" href="${esc(contactHref)}" target="_blank" rel="noopener">${icon('sparkles',15)} Falar com ${esc((p.name||'creator').split(' ')[0])}</a>` : ''}
+          <button class="btn btn-secondary mk-no-print" id="mkDownloadPdf">${icon('download',15)} Baixar PDF</button>
+        </div>
+      </div>` : ''}
+    </div>`;
+}
+function mkStaticParts(){
+  return {
+    metrics: computeLatestMetricsByPlatform(STATE.performance),
+    cases: STATE.clients.filter(c=>c.status==='Finalizado').map(c=>({ name:c.name, notes:c.notes })),
+    packages: STATE.estimates.map(e=>({ style:e.style, platform:e.platform, qty:e.qty, total:e.total, currency: STATE.currency })),
+  };
+}
+function mkDataFromState(){
+  return { profile: STATE.userProfile||{}, kit: { ...(STATE.mediaKit||{}), casesExtra: mkCasesDraft }, ...mkStaticParts() };
+}
+function mkDataFromForm(){
+  return {
+    profile: { name: val('mk-name'), avatarUrl: val('mk-avatar'), niche: val('mk-niche'), bio: val('mk-bio'), contact: val('mk-contact') },
+    kit: { bioExtendida: val('mk-bioext'), fotoCapaUrl: val('mk-capa'), publicoFaixaEtaria: val('mk-faixa'), publicoGenero: val('mk-genero'), publicoLocalizacao: val('mk-local'), casesExtra: mkCasesDraft },
+    ...mkStaticParts(),
+  };
+}
+let mkCasesDraft = null;
+function screenMediaKit(){
+  if(mkCasesDraft===null) mkCasesDraft = (STATE.mediaKit && STATE.mediaKit.casesExtra || []).map(c=>({...c}));
+  const up = STATE.userProfile||{}; const mk = STATE.mediaKit||{};
+  const publicUrl = mk.slug ? mkPublicUrl(mk.slug) : '';
+  return `
+    ${topbar('Sua página de apresentação para marcas')}
+    <main>
+      <div class="section-title" style="margin-top:0">Perfil público</div>
+      <div class="card">
+        <div class="field-row">
+          <div class="field"><label>Nome</label><input id="mk-name" value="${esc(up.name||'')}" placeholder="Seu nome ou marca pessoal"></div>
+          <div class="field"><label>Nicho</label><select id="mk-niche"><option value="">Nenhum</option>${NICHE_OPTIONS.map(n=>`<option ${up.niche===n?'selected':''}>${n}</option>`).join('')}</select></div>
+        </div>
+        <div class="field"><label>Foto de perfil (URL)</label><input id="mk-avatar" value="${esc(up.avatarUrl||'')}" placeholder="https://..."></div>
+        <div class="field"><label>Bio curta</label><textarea id="mk-bio" rows="2">${esc(up.bio||'')}</textarea></div>
+        <div class="field"><label>Contato (e-mail, WhatsApp ou link)</label><input id="mk-contact" value="${esc(up.contact||'')}" placeholder="voce@email.com ou 5511999999999"></div>
+      </div>
+      <div class="section-title">Mídia Kit</div>
+      <div class="card">
+        <div class="field"><label>Bio estendida (exibida no topo do kit)</label><textarea id="mk-bioext" rows="3">${esc(mk.bioExtendida||'')}</textarea></div>
+        <div class="field"><label>Foto de capa (URL)</label><input id="mk-capa" value="${esc(mk.fotoCapaUrl||'')}" placeholder="https://..."></div>
+        <div class="field-hint" style="margin-bottom:var(--s4)">Upload de arquivo ainda não é suportado — cole o link de uma imagem já hospedada.</div>
+      </div>
+      <div class="section-title">Demografia do público (opcional)</div>
+      <div class="card">
+        <div class="field-row">
+          <div class="field"><label>Faixa etária</label><input id="mk-faixa" value="${esc(mk.publicoFaixaEtaria||'')}" placeholder="Ex: 18-34 anos"></div>
+          <div class="field"><label>Gênero</label><input id="mk-genero" value="${esc(mk.publicoGenero||'')}" placeholder="Ex: 70% mulheres"></div>
+        </div>
+        <div class="field"><label>Localização</label><input id="mk-local" value="${esc(mk.publicoLocalizacao||'')}" placeholder="Ex: 60% Brasil, 20% Portugal"></div>
+      </div>
+      <div class="section-title">Cases extras <span class="see-all" id="mkAddCaseBtn">+ Adicionar</span></div>
+      ${mkCasesDraft.length ? mkCasesDraft.map((c,i)=>`
+        <div class="card">
+          <div class="field-row">
+            <div class="field"><label>Marca</label><input data-mk-case-field="marca" data-mk-case-idx="${i}" value="${esc(c.marca||'')}"></div>
+            <div class="field"><label>Link (opcional)</label><input data-mk-case-field="link" data-mk-case-idx="${i}" value="${esc(c.link||'')}"></div>
+          </div>
+          <div class="field"><label>Descrição</label><input data-mk-case-field="descricao" data-mk-case-idx="${i}" value="${esc(c.descricao||'')}"></div>
+          <div style="text-align:right"><span class="icon-action danger" data-mk-case-del="${i}">${icon('trash',16)}</span></div>
+        </div>`).join('') : `<div class="field-hint" style="margin-bottom:var(--s4)">Marcas com status "Finalizado" no CRM entram como case automaticamente. Use isto só para trabalhos extras que não estão no sistema.</div>`}
+      <div class="section-title">Link público</div>
+      <div class="card">
+        <div class="field"><label>Slug (parte final do link)</label><input id="mk-slug" value="${esc(mk.slug||'')}" placeholder="${esc(slugify(up.name||'seu-nome'))}"></div>
+        ${publicUrl ? `<div class="field-hint" style="margin-bottom:var(--s3)">Link atual: <strong style="color:var(--brown-800)">${esc(publicUrl)}</strong></div>` : `<div class="field-hint" style="margin-bottom:var(--s3)">Sem link público ainda — clique em "Gerar link público" para publicar.</div>`}
+        <div style="display:flex;gap:var(--s3);flex-wrap:wrap">
+          <button class="btn btn-primary" style="flex:1" id="mkSaveBtn">${icon('check',15)} Salvar Mídia Kit</button>
+          <button class="btn btn-secondary" id="mkGenerateLinkBtn">${icon('link',15)} Gerar link público</button>
+          ${publicUrl ? `<button class="btn btn-secondary" id="mkCopyLink">${icon('copy',15)} Copiar link</button>
+          <button class="btn btn-secondary" id="mkExportPdf">${icon('download',15)} Exportar PDF</button>` : ''}
+        </div>
+      </div>
+      <div class="section-title">Preview</div>
+      <div class="card" style="padding:0;overflow:hidden">
+        <div id="mkPreview">${renderMediaKitMarkup(mkDataFromState(), {})}</div>
+      </div>
+    </main>`;
+}
+async function saveMediaKitForm(withSlug){
+  const btn = document.getElementById('mkSaveBtn');
+  btn.disabled = true;
+  try{
+    const profileData = { name: val('mk-name'), avatarUrl: val('mk-avatar'), niche: val('mk-niche'), bio: val('mk-bio'), contact: val('mk-contact') };
+    STATE.userProfile = await updateUserProfileInSupabase(profileData);
+    let slug = val('mk-slug');
+    if(withSlug && !slug) slug = slugify(profileData.name) || 'meu-kit';
+    const kitData = { bioExtendida: val('mk-bioext'), fotoCapaUrl: val('mk-capa'), publicoFaixaEtaria: val('mk-faixa'), publicoGenero: val('mk-genero'), publicoLocalizacao: val('mk-local'), casesExtra: mkCasesDraft, slug: slug||null };
+    STATE.mediaKit = await saveMediaKitWithSlugFallback(kitData);
+    render(); showToast('Mídia Kit salvo');
+  }catch(e){ showToast('Erro ao salvar Mídia Kit: ' + e.message); btn.disabled = false; }
+}
+function bindMediaKitScreen(){
+  const refresh = ()=>{ const box = document.getElementById('mkPreview'); if(box) box.innerHTML = renderMediaKitMarkup(mkDataFromForm(), {}); };
+  ['mk-name','mk-avatar','mk-niche','mk-bio','mk-contact','mk-bioext','mk-capa','mk-faixa','mk-genero','mk-local'].forEach(id=>{
+    const el = document.getElementById(id);
+    el?.addEventListener('input', refresh); el?.addEventListener('change', refresh);
+  });
+  document.getElementById('mkAddCaseBtn')?.addEventListener('click', ()=>{ mkCasesDraft.push({ marca:'', descricao:'', link:'' }); render(); });
+  document.querySelectorAll('[data-mk-case-field]').forEach(el=> el.addEventListener('input', (e)=>{
+    mkCasesDraft[parseInt(el.dataset.mkCaseIdx)][el.dataset.mkCaseField] = e.target.value; refresh();
+  }));
+  document.querySelectorAll('[data-mk-case-del]').forEach(el=> el.addEventListener('click', ()=>{ mkCasesDraft.splice(parseInt(el.dataset.mkCaseDel),1); render(); }));
+  document.getElementById('mkCopyLink')?.addEventListener('click', ()=>{ navigator.clipboard.writeText(mkPublicUrl(STATE.mediaKit.slug)); showToast('Link copiado'); });
+  document.getElementById('mkExportPdf')?.addEventListener('click', ()=>{ window.open(mkPublicUrl(STATE.mediaKit.slug), '_blank'); });
+  document.getElementById('mkSaveBtn').addEventListener('click', ()=> saveMediaKitForm(false));
+  document.getElementById('mkGenerateLinkBtn').addEventListener('click', ()=> saveMediaKitForm(true));
+}
+
 /* ---------- Router ---------- */
 function render(){
   const el = document.getElementById('screen-content');
   if(STATE.tab==='clients' && STATE.clientDetailId){ el.innerHTML = screenClientDetail(STATE.clientDetailId); }
   else{
-    const screens = { home:screenHome, clients:screenClients, content:screenContent, finance:screenFinance, performance:screenPerformance, rewards:screenRewards, settings:screenSettings };
+    const screens = { home:screenHome, clients:screenClients, content:screenContent, finance:screenFinance, performance:screenPerformance, mediakit:screenMediaKit, rewards:screenRewards, settings:screenSettings };
     el.innerHTML = screens[STATE.tab]();
   }
   renderNav();
   bindDynamic();
-  document.getElementById('fabBtn').style.display = (['performance','rewards','settings'].includes(STATE.tab) || (STATE.tab==='clients' && STATE.clientDetailId) || (STATE.tab==='content' && contentSub!=='fluxo')) ? 'none' : 'flex';
+  document.getElementById('fabBtn').style.display = (['performance','mediakit','rewards','settings'].includes(STATE.tab) || (STATE.tab==='clients' && STATE.clientDetailId) || (STATE.tab==='content' && contentSub!=='fluxo')) ? 'none' : 'flex';
 }
 
 function bindDynamic(){
@@ -2200,6 +2468,9 @@ function bindDynamic(){
     catch(e){ showToast('Erro ao remover produto: ' + e.message); }
   }));
   document.querySelectorAll('[data-copy-link]').forEach(el=> el.addEventListener('click', ()=>{ navigator.clipboard.writeText(el.dataset.copyLink); showToast('Link copiado'); }));
+
+  // mídia kit (top-level page)
+  document.getElementById('mkSaveBtn') && bindMediaKitScreen();
 
   // settings (top-level page)
   document.getElementById('saveSettingsBtn') && bindSettingsSave();
@@ -2425,7 +2696,39 @@ async function signOut(){
 }
 
 /* ---------- Init ---------- */
+/* ---------- Mídia Kit: página pública standalone (sem login, sem sidebar) ---------- */
+function normalizePublicMediaKit(raw){
+  const rp = raw.profile || {};
+  return {
+    profile: { name: rp.name || rp.full_name || '', avatarUrl: rp.avatar_url || '', bio: rp.bio || '', niche: rp.niche || '', contact: rp.contact || '' },
+    kit: { bioExtendida: raw.bioExtendida, fotoCapaUrl: raw.fotoCapaUrl, publicoFaixaEtaria: raw.publicoFaixaEtaria, publicoGenero: raw.publicoGenero, publicoLocalizacao: raw.publicoLocalizacao, casesExtra: raw.casesExtra||[] },
+    metrics: raw.metrics||[], cases: raw.cases||[], packages: raw.packages||[],
+  };
+}
+async function renderPublicMediaKitPage(slug){
+  document.body.innerHTML = `<div class="mk-page" style="padding-top:var(--s9);text-align:center"><div class="spinner" style="border-top-color:var(--brown-600);border-color:var(--border);margin:0 auto"></div></div>`;
+  let raw = null;
+  try{ raw = await fetchPublicMediaKit(slug); }catch(e){ raw = null; }
+  if(!raw){
+    document.body.innerHTML = `<div class="auth-screen"><div class="auth-card" style="text-align:center">
+      <div class="auth-brand" style="justify-content:center"><span class="dot"></span> AKORA</div>
+      <div class="secondary" style="margin-top:var(--s3)">Este Mídia Kit não existe ou o link mudou.</div>
+    </div></div>`;
+    return;
+  }
+  const data = normalizePublicMediaKit(raw);
+  document.title = `${data.profile.name || 'Mídia Kit'} — AKORA`;
+  document.body.innerHTML = renderMediaKitMarkup(data, { isPublic:true });
+  document.getElementById('mkDownloadPdf')?.addEventListener('click', ()=> window.print());
+}
+
+/* ---------- Init ---------- */
 (async function init(){
+  // Rota pública: index.html?mediakit=<slug> — nunca passa pela tela de login,
+  // sempre busca dado fresco via RPC (sem cache).
+  const publicSlug = new URLSearchParams(location.search).get('mediakit');
+  if(publicSlug){ await renderPublicMediaKitPage(publicSlug); return; }
+
   const { data:{ session } } = await sb.auth.getSession();
   if(!session){ renderAuthScreen(); return; }
   AUTH.session = session;

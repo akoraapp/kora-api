@@ -856,6 +856,112 @@ async function bindAssistant(){
 }
 
 /* ============ HOME ============ */
+/* ---- Central de Execução: fila de ações reais, uma de cada vez ---- */
+function getExecutionActions(){
+  const todayStr = new Date().toISOString().slice(0,10);
+  const in3days = new Date(Date.now()+3*86400000).toISOString().slice(0,10);
+  const list = [];
+  STATE.content.forEach(c=>{
+    if(!c.dueDate || c.status==='Publicado') return;
+    if(c.dueDate < todayStr){
+      list.push({ urgency:0, icon:'clock', title:`Finalizar e publicar: ${c.title}`, sub:`Atrasado desde ${fmtDate(c.dueDate)} · ${c.status}`,
+        action:()=>{ STATE.tab='content'; contentSub='fluxo'; STATE.clientDetailId=null; render(); openModal(contentForm(c), ()=>bindContentSave(c.id)); } });
+    } else if(c.dueDate === todayStr){
+      list.push({ urgency:1, icon:'calendar', title:`Entregar hoje: ${c.title}`, sub:`${esc(c.platform||'')}${c.client?(' · '+esc(c.client)):''} · ${c.status}`,
+        action:()=>{ STATE.tab='content'; contentSub='fluxo'; STATE.clientDetailId=null; render(); openModal(contentForm(c), ()=>bindContentSave(c.id)); } });
+    }
+  });
+  STATE.transactions.forEach(t=>{
+    if(t.status==='Pendente' && t.type==='Receita'){
+      list.push({ urgency:2, icon:'dollar', title:`Cobrar/confirmar pagamento: ${t.description}`, sub:fmtBRL(t.amount),
+        action:()=>{ STATE.tab='finance'; STATE.financeSub='geral'; STATE.clientDetailId=null; render(); } });
+    }
+  });
+  STATE.clients.forEach(c=>{
+    if(c.status==='Contrato Enviado'){
+      list.push({ urgency:3, icon:'file', title:`Fazer follow-up do contrato: ${c.name}`, sub:'Aguardando resposta do cliente',
+        action:()=>{ STATE.tab='clients'; STATE.clientDetailId=c.id; render(); } });
+    }
+  });
+  STATE.content.forEach(c=>{
+    if(c.dueDate && c.dueDate>todayStr && c.dueDate<=in3days && c.status!=='Publicado'){
+      list.push({ urgency:4, icon:'calendar', title:`Preparar: ${c.title}`, sub:`Prazo em ${fmtDate(c.dueDate)}`,
+        action:()=>{ STATE.tab='content'; contentSub='fluxo'; STATE.clientDetailId=null; render(); openModal(contentForm(c), ()=>bindContentSave(c.id)); } });
+    }
+  });
+  return list.sort((a,b)=>a.urgency-b.urgency);
+}
+function executionCard(){
+  const actions = getExecutionActions();
+  const n = actions.length;
+  return `
+    <div class="card" style="background:var(--brown-600);color:#fff;margin-top:var(--s5)">
+      <div class="stat-label" style="color:rgba(255,255,255,0.7)">Central de Execução</div>
+      <div style="font-family:'Playfair Display';font-size:20px;font-weight:700;margin:2px 0 var(--s3)">${n>0 ? `Você tem ${n} ${n===1?'ação':'ações'} para hoje` : 'Tudo em dia por aqui'}</div>
+      ${n>0 ? `
+        <div style="display:flex;flex-direction:column;gap:5px;margin-bottom:var(--s4)">
+          ${actions.slice(0,3).map(a=>`<div style="font-size:12px;color:rgba(255,255,255,0.85)">• ${esc(a.title)}</div>`).join('')}
+          ${n>3 ? `<div style="font-size:12px;color:rgba(255,255,255,0.6)">+ ${n-3} outra(s)</div>` : ''}
+        </div>
+        <button class="btn btn-block" style="background:#fff;color:var(--brown-600)" id="startExecutionBtn">${icon('sparkles',15)} Iniciar trabalho</button>
+      ` : `<div style="font-size:13px;color:rgba(255,255,255,0.85)">Nenhuma ação pendente — bom trabalho!</div>`}
+    </div>`;
+}
+let execIndex = 0;
+function executionModal(){
+  const actions = getExecutionActions();
+  if(!actions.length || execIndex >= actions.length){
+    return `
+      <div class="modal-header"><div class="modal-title display">Modo Execução</div><div class="icon-btn" id="closeModal">${icon('x',16)}</div></div>
+      <div style="text-align:center;padding:var(--s7) 0">${icon('check',32,'#5D8A5A')}<div style="margin-top:var(--s4);font-size:15px;color:var(--brown-800);font-weight:600">Todas as ações de hoje foram vistas!</div></div>`;
+  }
+  const a = actions[execIndex];
+  return `
+    <div class="modal-header"><div class="modal-title display">Modo Execução</div><div class="icon-btn" id="closeModal">${icon('x',16)}</div></div>
+    <div class="ai-tile" style="cursor:default;margin-bottom:var(--s5)">
+      <div class="ai-tile-top">
+        <div class="list-icon" style="background:var(--brown-600);color:#fff">${icon('sparkles',18)}</div>
+        <div style="flex:1"><div class="list-sub" id="execAiText">Analisando suas ações de hoje...</div></div>
+      </div>
+    </div>
+    <div class="field-hint" style="margin-bottom:var(--s2)">Ação ${execIndex+1} de ${actions.length}</div>
+    <div class="card">
+      <div class="list-item" style="border-bottom:none">
+        <div class="list-icon">${icon(a.icon,20)}</div>
+        <div style="flex:1"><div class="list-title" style="font-size:15px">${esc(a.title)}</div><div class="list-sub">${esc(a.sub)}</div></div>
+      </div>
+    </div>
+    <div style="display:flex;gap:var(--s3);margin-top:var(--s5)">
+      <button class="btn btn-secondary" style="flex:1" id="execSkipBtn">Pular por agora</button>
+      <button class="btn btn-primary" style="flex:1" id="execGoBtn">${icon('check',15)} Resolver agora</button>
+    </div>`;
+}
+async function bindExecutionAiIntro(actions){
+  if(!actions.length) return;
+  try{
+    const system = "Você é a assistente pessoal da criadora dentro do app AKORA, no 'Modo Execução' — seu papel é dar um empurrão motivador e direto pra ela encarar as tarefas do dia, uma de cada vez, sem enrolação. Tom acolhedor e direto. Máximo 2 frases curtas.";
+    const user = `Ações pendentes de hoje, já em ordem de prioridade (a primeira é a mais urgente): ${actions.map(a=>a.title).join('; ')}. Dê um empurrão inicial mencionando a primeira ação da lista.`;
+    const text = await callAI(system, user, 250, 'execucao');
+    const box = document.getElementById('execAiText');
+    if(box) box.textContent = text;
+  }catch(e){
+    const box = document.getElementById('execAiText');
+    if(box) box.textContent = `Bora começar! Primeira ação: ${actions[0].title}`;
+  }
+}
+function bindExecutionModal(){
+  const actions = getExecutionActions();
+  bindExecutionAiIntro(actions);
+  document.getElementById('execSkipBtn')?.addEventListener('click', ()=>{
+    execIndex++; openModal(executionModal(), bindExecutionModal);
+  });
+  document.getElementById('execGoBtn')?.addEventListener('click', ()=>{
+    const a = actions[execIndex];
+    execIndex++;
+    closeModal();
+    if(a && a.action) a.action();
+  });
+}
 function screenHome(){
   const now = new Date(); const month = now.getMonth(), year = now.getFullYear();
   const paid = STATE.transactions.filter(t=>t.status==='Pago');
@@ -893,6 +999,7 @@ function screenHome(){
         ${goal>0 ? `<div class="progress-track" style="background:rgba(255,255,255,0.2)"><div class="progress-fill" style="width:${goalPct}%;background:#fff"></div></div>
         <div style="font-size:12px;color:rgba(255,255,255,0.75);margin-top:var(--s2)">${goalPct}% alcançado · ${fmtBRL(income)} de ${fmtBRL(goal)}</div>` : `<div style="font-size:12px;color:rgba(255,255,255,0.75);margin-top:var(--s2)">Toque para definir quanto você quer faturar este mês</div>`}
       </div>
+      ${executionCard()}
       <div class="section-title">Ações rápidas</div>
       <div class="quick-actions">${qa('plus','Cliente','clients')}${qa('calendar','Conteúdo','content','fluxo')}${qa('dollar','Lançamento','finance')}${qa('wand','IA Studio','content','ia')}</div>
       <div class="section-title">Próximas entregas <span class="see-all" data-goto="content" data-sub="fluxo">Ver tudo</span></div>
@@ -2426,6 +2533,7 @@ function bindDynamic(){
   document.getElementById('bellBtn')?.addEventListener('click', ()=> openModal(notificationsModal(), bindAssistant));
   document.getElementById('avatarBtn')?.addEventListener('click', ()=>{ STATE.tab='settings'; STATE.clientDetailId=null; render(); });
   document.getElementById('goalCard')?.addEventListener('click', ()=> openModal(goalForm(), bindGoalSave));
+  document.getElementById('startExecutionBtn')?.addEventListener('click', ()=>{ execIndex = 0; openModal(executionModal(), bindExecutionModal); });
   document.querySelectorAll('[data-panelstatus]').forEach(el=> el.addEventListener('click', ()=>{ panelFilters.status = el.dataset.panelstatus; render(); }));
   document.getElementById('panelPlatform')?.addEventListener('change', (e)=>{ panelFilters.platform = e.target.value; render(); });
   document.getElementById('panelNiche')?.addEventListener('change', (e)=>{ panelFilters.niche = e.target.value; render(); });

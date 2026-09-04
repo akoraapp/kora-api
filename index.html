@@ -263,24 +263,26 @@ const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
 let AUTH = { session:null, workspaceId:null };
 
 let STATE = { clients:[], content:[], ideas:[], transactions:[], tiktok:[], contracts:[], estimates:[], performance:[], referrals:[], feature_interest_content_approval:[], profile:{}, userProfile:{}, mediaKit:null, aiUsage:null, language:'pt', currency:'BRL', goal:20000, referralCode:'', tab:'home', clientDetailId:null, financeSub:'geral', tiktokSub:'produtos', moreView:null };
-const CURRENCIES = { BRL:{symbol:'R$', label:'Real (BRL)'}, USD:{symbol:'$', label:'Dólar (USD)'}, CAD:{symbol:'C$', label:'Dólar canadense (CAD)'}, EUR:{symbol:'€', label:'Euro (EUR)'}, GBP:{symbol:'£', label:'Libra (GBP)'}, MXN:{symbol:'$', label:'Peso mexicano (MXN)'}, ARS:{symbol:'$', label:'Peso argentino (ARS)'} };
+const CURRENCIES = { BRL:{symbol:'R$', label:'Real (BRL)'}, USD:{symbol:'$', label:'Dólar (USD)'}, CAD:{symbol:'C$', label:'Dólar canadense (CAD)'}, EUR:{symbol:'€', label:'Euro (EUR)'}, GBP:{symbol:'£', label:'Libra (GBP)'}, CHF:{symbol:'CHF', label:'Franco suíço (CHF)'}, MXN:{symbol:'$', label:'Peso mexicano (MXN)'}, ARS:{symbol:'$', label:'Peso argentino (ARS)'} };
 const DOC_LABELS = {
   BRL: { label:'CPF ou CNPJ', placeholder:'000.000.000-00 ou 00.000.000/0001-00' },
   USD: { label:'SSN ou EIN (Tax ID)', placeholder:'XX-XXXXXXX' },
   CAD: { label:'SIN ou Business Number (BN)', placeholder:'000000000' },
   GBP: { label:'UTR ou Company Number (CRN)', placeholder:'1234567890' },
   EUR: { label:'VAT Number / Tax ID', placeholder:'ex: DE123456789' },
+  CHF: { label:'AHV/AVS Number ou UID (Tax ID)', placeholder:'756.1234.5678.90' },
   MXN: { label:'RFC', placeholder:'XAXX010101000' },
   ARS: { label:'CUIT/CUIL', placeholder:'20-12345678-9' },
 };
 function docLabel(){ return DOC_LABELS[STATE.currency] || DOC_LABELS.BRL; }
-const JURISDICTION_NAMES = { BRL:'Brasil', USD:'Estados Unidos', CAD:'Canadá', GBP:'Reino Unido', EUR:'União Europeia', MXN:'México', ARS:'Argentina' };
+const JURISDICTION_NAMES = { BRL:'Brasil', USD:'Estados Unidos', CAD:'Canadá', GBP:'Reino Unido', EUR:'União Europeia', CHF:'Suíça', MXN:'México', ARS:'Argentina' };
 const ADDRESS_PLACEHOLDERS = {
   BRL: 'Rua, número, complemento, bairro, cidade, estado, CEP',
   USD: 'Street, number, city, state, ZIP code',
   CAD: 'Street, number, city, province, postal code',
   GBP: 'Street, number, city, county, postcode',
   EUR: 'Street, number, city, postal code, country',
+  CHF: 'Street, number, city, canton, postal code',
   MXN: 'Calle, número, colonia, ciudad, estado, código postal',
   ARS: 'Calle, número, ciudad, provincia, código postal',
 };
@@ -856,7 +858,7 @@ async function bindAssistant(){
 }
 
 /* ============ HOME ============ */
-/* ---- Central de Execução: fila de ações reais, uma de cada vez ---- */
+/* ---- Lista do Dia: fila de ações reais, uma de cada vez ---- */
 function getExecutionActions(){
   const todayStr = new Date().toISOString().slice(0,10);
   const in3days = new Date(Date.now()+3*86400000).toISOString().slice(0,10);
@@ -896,7 +898,7 @@ function executionCard(){
   const n = actions.length;
   return `
     <div class="card" style="background:var(--brown-600);color:#fff;margin-top:var(--s5)">
-      <div class="stat-label" style="color:rgba(255,255,255,0.7)">Central de Execução</div>
+      <div class="stat-label" style="color:rgba(255,255,255,0.7)">Lista do Dia</div>
       <div style="font-family:'Playfair Display';font-size:20px;font-weight:700;margin:2px 0 var(--s3)">${n>0 ? `Você tem ${n} ${n===1?'ação':'ações'} para hoje` : 'Tudo em dia por aqui'}</div>
       ${n>0 ? `
         <div style="display:flex;flex-direction:column;gap:5px;margin-bottom:var(--s4)">
@@ -912,12 +914,12 @@ function executionModal(){
   const actions = getExecutionActions();
   if(!actions.length || execIndex >= actions.length){
     return `
-      <div class="modal-header"><div class="modal-title display">Modo Execução</div><div class="icon-btn" id="closeModal">${icon('x',16)}</div></div>
+      <div class="modal-header"><div class="modal-title display">Lista do Dia</div><div class="icon-btn" id="closeModal">${icon('x',16)}</div></div>
       <div style="text-align:center;padding:var(--s7) 0">${icon('check',32,'#5D8A5A')}<div style="margin-top:var(--s4);font-size:15px;color:var(--brown-800);font-weight:600">Todas as ações de hoje foram vistas!</div></div>`;
   }
   const a = actions[execIndex];
   return `
-    <div class="modal-header"><div class="modal-title display">Modo Execução</div><div class="icon-btn" id="closeModal">${icon('x',16)}</div></div>
+    <div class="modal-header"><div class="modal-title display">Lista do Dia</div><div class="icon-btn" id="closeModal">${icon('x',16)}</div></div>
     <div class="ai-tile" style="cursor:default;margin-bottom:var(--s5)">
       <div class="ai-tile-top">
         <div class="list-icon" style="background:var(--brown-600);color:#fff">${icon('sparkles',18)}</div>
@@ -939,7 +941,7 @@ function executionModal(){
 async function bindExecutionAiIntro(actions){
   if(!actions.length) return;
   try{
-    const system = "Você é a assistente pessoal da criadora dentro do app AKORA, no 'Modo Execução' — seu papel é dar um empurrão motivador e direto pra ela encarar as tarefas do dia, uma de cada vez, sem enrolação. Tom acolhedor e direto. Máximo 2 frases curtas.";
+    const system = "Você é a assistente pessoal da criadora dentro do app AKORA, na 'Lista do Dia' — seu papel é dar um empurrão motivador e direto pra ela encarar as tarefas do dia, uma de cada vez, sem enrolação. Tom acolhedor e direto. Máximo 2 frases curtas.";
     const user = `Ações pendentes de hoje, já em ordem de prioridade (a primeira é a mais urgente): ${actions.map(a=>a.title).join('; ')}. Dê um empurrão inicial mencionando a primeira ação da lista.`;
     const text = await callAI(system, user, 250, 'execucao');
     const box = document.getElementById('execAiText');
@@ -999,9 +1001,9 @@ function screenHome(){
         ${goal>0 ? `<div class="progress-track" style="background:rgba(255,255,255,0.2)"><div class="progress-fill" style="width:${goalPct}%;background:#fff"></div></div>
         <div style="font-size:12px;color:rgba(255,255,255,0.75);margin-top:var(--s2)">${goalPct}% alcançado · ${fmtBRL(income)} de ${fmtBRL(goal)}</div>` : `<div style="font-size:12px;color:rgba(255,255,255,0.75);margin-top:var(--s2)">Toque para definir quanto você quer faturar este mês</div>`}
       </div>
-      ${executionCard()}
       <div class="section-title">Ações rápidas</div>
       <div class="quick-actions">${qa('plus','Cliente','clients')}${qa('calendar','Conteúdo','content','fluxo')}${qa('dollar','Lançamento','finance')}${qa('wand','IA Studio','content','ia')}</div>
+      ${executionCard()}
       <div class="section-title">Próximas entregas <span class="see-all" data-goto="content" data-sub="fluxo">Ver tudo</span></div>
       ${upcoming.length ? `<div class="card">${upcoming.map(c=>`<div class="list-item"><div class="list-icon">${icon('calendar',18)}</div><div><div class="list-title">${esc(c.title)}</div><div class="list-sub">${esc(c.status)} ${c.client?('· '+esc(c.client)):''}</div></div><div class="list-right">${fmtDate(c.dueDate)}</div></div>`).join('')}</div>` : emptyState('calendar','Nenhuma entrega agendada','Crie um conteúdo com prazo para ele aparecer aqui.')}
       <div class="section-title">Painel de Conteúdo</div>

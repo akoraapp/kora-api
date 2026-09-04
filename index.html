@@ -1983,7 +1983,7 @@ function screenSettings(){
       <div class="card">
         <div class="field-row">
           <div class="field"><label>Seu nome/negócio</label><input id="st-name" value="${esc(p.name||'')}" placeholder="Seu nome ou marca"></div>
-          <div class="field"><label>Seu ${docLabel().label}</label><input id="st-doc" value="${esc(p.doc||'')}" placeholder="${docLabel().placeholder}"></div>
+          <div class="field"><label id="st-doc-label">Seu ${docLabel().label}</label><input id="st-doc" value="${esc(p.doc||'')}" placeholder="${docLabel().placeholder}"></div>
         </div>
         <div class="field-row">
           <div class="field"><label>E-mail</label><input id="st-email" value="${esc(p.email||'')}" placeholder="voce@email.com"></div>
@@ -1993,7 +1993,7 @@ function screenSettings(){
           <div class="field"><label>Idioma do app</label><select id="st-lang">${Object.keys(LANG_NAMES).map(k=>`<option value="${k}" ${STATE.language===k?'selected':''}>${LANG_NAMES[k]}</option>`).join('')}</select></div>
           <div class="field"><label>Moeda padrão</label><select id="st-currency">${Object.keys(CURRENCIES).map(c=>`<option value="${c}" ${STATE.currency===c?'selected':''}>${CURRENCIES[c].label}</option>`).join('')}</select></div>
         </div>
-        <div class="field-hint" style="margin-top:-8px;margin-bottom:var(--s4)">País/jurisdição usado nos contratos: <strong style="color:var(--brown-800)">${jurisdiction()}</strong> — muda automaticamente junto com a moeda, assim como o rótulo do documento fiscal acima.</div>
+        <div class="field-hint" style="margin-top:-8px;margin-bottom:var(--s4)">País/jurisdição usado nos contratos: <strong style="color:var(--brown-800)" id="st-jurisdiction">${jurisdiction()}</strong> — muda junto com a moeda (assim como o rótulo do documento fiscal acima), mesmo antes de salvar.</div>
         <div class="field"><label>Meta de receita mensal</label><input id="st-goal" type="number" step="0.01" value="${STATE.goal}"></div>
         <div class="field-hint" style="margin-bottom:var(--s4)">Seus dados (nome, documento, endereço) são usados para preencher automaticamente os contratos gerados por IA. O idioma escolhido aqui muda os textos da Calculadora de Preço (Conteúdo → Preço). A tradução completa do restante do app chega em uma próxima etapa.</div>
         <button class="btn btn-primary" id="saveSettingsBtn">Salvar configurações</button>
@@ -2038,6 +2038,14 @@ function featureInterestAdminSection(){
     </div>`;
 }
 function bindSettingsSave(){
+  document.getElementById('st-currency')?.addEventListener('change', (e)=>{
+    const cur = e.target.value;
+    const dl = DOC_LABELS[cur] || DOC_LABELS.BRL;
+    document.getElementById('st-doc-label').textContent = 'Seu ' + dl.label;
+    document.getElementById('st-doc').placeholder = dl.placeholder;
+    document.getElementById('st-address').placeholder = ADDRESS_PLACEHOLDERS[cur] || ADDRESS_PLACEHOLDERS.BRL;
+    document.getElementById('st-jurisdiction').textContent = JURISDICTION_NAMES[cur] || JURISDICTION_NAMES.BRL;
+  });
   document.getElementById('saveSettingsBtn').addEventListener('click', async ()=>{
     STATE.profile = { name: val('st-name'), doc: val('st-doc'), email: val('st-email'), address: val('st-address') };
     STATE.language = val('st-lang'); STATE.currency = val('st-currency'); STATE.goal = parseFloat(document.getElementById('st-goal').value) || 0;

@@ -275,6 +275,16 @@ const DOC_LABELS = {
 };
 function docLabel(){ return DOC_LABELS[STATE.currency] || DOC_LABELS.BRL; }
 const JURISDICTION_NAMES = { BRL:'Brasil', USD:'Estados Unidos', CAD:'Canadá', GBP:'Reino Unido', EUR:'União Europeia', MXN:'México', ARS:'Argentina' };
+const ADDRESS_PLACEHOLDERS = {
+  BRL: 'Rua, número, complemento, bairro, cidade, estado, CEP',
+  USD: 'Street, number, city, state, ZIP code',
+  CAD: 'Street, number, city, province, postal code',
+  GBP: 'Street, number, city, county, postcode',
+  EUR: 'Street, number, city, postal code, country',
+  MXN: 'Calle, número, colonia, ciudad, estado, código postal',
+  ARS: 'Calle, número, ciudad, provincia, código postal',
+};
+function addressPlaceholder(){ return ADDRESS_PLACEHOLDERS[STATE.currency] || ADDRESS_PLACEHOLDERS.BRL; }
 function jurisdiction(){ return JURISDICTION_NAMES[STATE.currency] || 'Brasil'; }
 function fmtCur(v, cur){ const c = CURRENCIES[cur]||CURRENCIES.BRL; return c.symbol + ' ' + Number(v||0).toLocaleString('pt-BR', {minimumFractionDigits:2, maximumFractionDigits:2}); }
 
@@ -338,6 +348,7 @@ const PRIORITY_CLASS = { 'Baixa':'badge-baixa','Média':'badge-media','Alta':'ba
 const NICHE_OPTIONS = ['Beleza','Moda','Fitness','Alimentação/Culinária','Viagem','Tecnologia','Finanças','Maternidade','Lifestyle','Games','Educação','Humor/Entretenimento','Negócios','Saúde e Bem-estar','Pets','Casa e Decoração','Outro'];
 const DEAL_PLATFORM_OPTIONS = ['Negociação direta (sem plataforma)','TikTok Creator Marketplace / TikTok Shop','Instagram/Meta Brand Collabs','YouTube BrandConnect','GRIN','Aspire (AspireIQ)','Creator.co','Mavely','LTK (LikeToKnow.it)','ShopMy','Levanta','CreatorIQ','Later Influence','Afluencer','Heartbeat','Amazon Influencer Program','Agência de talentos','Outro'];
 const TONE_OPTIONS = ['Leve e engraçado','Inspirador','Educativo','Profissional','Casual e autêntico','Emocional','Direto ao ponto','Provocativo e ousado'];
+const AGE_RANGE_OPTIONS = ['Menos de 18','18-24','25-34','35-44','45-54','55-64','65+','Diversificado'];
 const CAMPAIGN_GOAL_OPTIONS = ['Aumentar reconhecimento de marca','Gerar vendas/conversão','Lançamento de produto','Aumentar engajamento','Fidelizar clientes','Educar o público sobre o produto','Gerar tráfego para site/loja','Outro'];
 const DELIVERY_STYLE_OPTIONS = ['Voice over (narração)','Falado direto para câmera (talking head)','Estilo vlog / dia a dia','Review/Análise de produto','Tutorial passo a passo','Unboxing'];
 const CONTENT_FORMAT_OPTIONS = ['Legenda/Caption','Ideia de roteiro','Sequência de Stories','Texto para carrossel','Ideia de vídeo','Post longo/Thread'];
@@ -691,6 +702,16 @@ async function saveMediaKitInSupabase(data){
   const { data: row, error } = await sb.from('media_kit').upsert(payload, { onConflict:'workspace_id' }).select().single();
   if(error) throw error;
   return mapMediaKitRow(row);
+}
+const MAX_PHOTO_BYTES = 5 * 1024 * 1024;
+async function uploadMediaKitPhoto(file, kind){
+  if(file.size > MAX_PHOTO_BYTES) throw new Error('Imagem maior que 5MB');
+  const ext = (file.name.split('.').pop()||'jpg').toLowerCase().replace(/[^a-z0-9]/g,'') || 'jpg';
+  const path = `${AUTH.session.user.id}/${kind}.${ext}`;
+  const { error } = await sb.storage.from('media-kit').upload(path, file, { upsert:true, contentType:file.type });
+  if(error) throw error;
+  const { data } = sb.storage.from('media-kit').getPublicUrl(path);
+  return data.publicUrl + '?t=' + Date.now();
 }
 function slugify(text){
   return (text||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^a-z0-9]+/g,'-').replace(/^-+|-+$/g,'').slice(0,40);
@@ -1546,7 +1567,7 @@ function scriptForm(){
     <div class="modal-header"><div class="modal-title display">Gerador de Roteiro</div><div class="icon-btn" id="closeModal">${icon('x',16)}</div></div>
     <div class="field"><label>Tema / assunto</label><input id="sc-topic" placeholder="Ex: rotina de skincare noturna"></div>
     <div class="field-row">
-      <div class="field"><label>Idioma</label><select id="sc-lang"><option>Português</option><option>Inglês</option><option>Espanhol</option></select></div>
+      <div class="field"><label>Idioma</label><select id="sc-lang"><option>Português</option><option>Inglês</option><option>Espanhol</option><option>Francês</option></select></div>
       <div class="field"><label>Tipo de conteúdo</label><select id="sc-type"><option>Reels</option><option>TikTok</option><option>YouTube Shorts</option><option>YouTube Longo</option><option>Story</option><option>Carrossel</option></select></div>
     </div>
     <div class="field-row">
@@ -1571,9 +1592,14 @@ function bindScriptGenerate(){
     const f = { topic, lang: val('sc-lang'), type: val('sc-type'), objective: val('sc-objective'), duration: val('sc-duration'), platform: val('sc-platform'), niche: val('sc-niche'), client: val('sc-client'), voiceover: val('sc-voiceover') };
     btn.disabled = true; btn.innerHTML = `<div class="spinner"></div> Gerando...`;
     try{
-      const langMap = { 'Português':'português do Brasil', 'Inglês':'English', 'Espanhol':'español' };
-      const system = `Você é um roteirista especialista em conteúdo de criadores digitais. Escreva sempre no idioma solicitado: ${langMap[f.lang]}.`;
-      const user = `Escreva um roteiro de ${f.type} para ${f.platform}, com duração de ${f.duration}, sobre o tema "${f.topic}", nicho ${f.niche||'geral'}, com objetivo de ${f.objective}, no estilo "${f.voiceover}".${f.client?(' O conteúdo é para a marca '+f.client+'.'):''} Estruture com: Gancho (primeiros 3s), Desenvolvimento, Call to action final. Seja direto e pronto para gravar.`;
+      const langMap = { 'Português':'português do Brasil', 'Inglês':'English', 'Espanhol':'español', 'Francês':'français' };
+      const system = `Você é um estrategista de conteúdo sênior especializado em UGC (User Generated Content) e vídeos de criadores, com anos de experiência roteirizando para criadores do nicho de ${f.niche||'lifestyle'}. Você NUNCA escreve como uma IA genérica — pensa como estrategista: todo roteiro precisa de um gancho forte e específico nos primeiros 2-3 segundos (thumb-stopper, nunca clichê tipo "você já se perguntou..."), ritmo pensado para retenção (frases curtas, linguagem 100% falada e nativa da plataforma, nunca institucional), e uma estrutura que soa como um criador de verdade falando pra câmera, não um texto formal. Evite qualquer clichê de IA (ex: "no mundo de hoje", "é importante notar que", "em suma"). Escreva sempre no idioma solicitado: ${langMap[f.lang]}.`;
+      const user = `Escreva um roteiro de ${f.type} para ${f.platform}, duração ${f.duration}, tema "${f.topic}", nicho ${f.niche||'geral'}, objetivo "${f.objective}", estilo de fala "${f.voiceover}".${f.client?(' Para a marca '+f.client+'.'):''}
+Estruture em 3 partes claramente marcadas:
+1) GANCHO (0-3s): uma frase ou ação específica ao tema que trava o scroll — nunca genérica.
+2) DESENVOLVIMENTO: ritmo dinâmico, linguagem falada, indique pausas/beats entre parênteses quando ajudar no timing.
+3) CTA FINAL: natural, alinhado ao objetivo, sem soar forçado ou vendedor demais.
+O roteiro precisa soar como um criador experiente falando, pronto pra gravar sem edição.`;
       const text = await callAI(system, user, 1200, 'roteiro');
       document.getElementById('scriptResultBox').innerHTML = `
         <div class="section-title" style="margin-top:var(--s6)">Roteiro gerado</div>
@@ -1603,16 +1629,16 @@ function briefingForm(){
     <div class="field"><label>Público-alvo</label><input id="br-audience" placeholder="Ex: mulheres 25-35, interessadas em skincare"></div>
     <div class="field"><label>Mensagem principal</label><textarea id="br-message" rows="2" placeholder="O que a marca quer comunicar"></textarea></div>
     <div class="field"><label>Entregáveis desejados</label><input id="br-deliverables" placeholder="Ex: 3 reels + 2 stories"></div>
-    <div class="field"><label>Tom de voz</label><input id="br-tone" placeholder="Ex: descontraído, autêntico"></div>
-    <button class="btn btn-primary btn-block" style="margin-top:var(--s5)" id="genBriefingBtn">${icon('sparkles',16)} Gerar briefing</button>
+    <div class="field"><label>Tom de voz</label><select id="br-tone">${TONE_OPTIONS.map(t=>`<option>${t}</option>`).join('')}</select></div>
+    <div class="field-hint" style="margin-bottom:var(--s4)">Preencha todos os campos acima para gerar — isso evita desperdiçar sua cota mensal de IA com um briefing incompleto.</div>
+    <button class="btn btn-primary btn-block" id="genBriefingBtn">${icon('sparkles',16)} Gerar briefing</button>
     <div id="briefingResultBox"></div>`;
 }
 function bindBriefingGenerate(){
   document.getElementById('genBriefingBtn').addEventListener('click', async ()=>{
     const btn = document.getElementById('genBriefingBtn');
-    const goal = val('br-goal');
-    if(!goal){ showToast('Descreva o objetivo da campanha'); return; }
-    const f = { client: val('br-client'), goal, audience: val('br-audience'), message: val('br-message'), deliverables: val('br-deliverables'), tone: val('br-tone') };
+    const f = { client: val('br-client'), goal: val('br-goal'), audience: val('br-audience'), message: val('br-message'), deliverables: val('br-deliverables'), tone: val('br-tone') };
+    if(!f.audience || !f.message || !f.deliverables){ showToast('Preencha público-alvo, mensagem principal e entregáveis antes de gerar'); return; }
     btn.disabled = true; btn.innerHTML = `<div class="spinner"></div> Gerando...`;
     try{
       const system = "Você é um estrategista de marketing de influência que ajuda criadores de conteúdo a montar briefings profissionais para apresentar a marcas.";
@@ -1636,7 +1662,7 @@ function postForm(){
     <div class="field"><label>Objetivo</label><select id="pc-goal"><option>Atrair mais seguidores</option><option>Gerar vendas</option><option>Aumentar engajamento</option><option>Educar a audiência</option><option>Fortalecer a marca pessoal</option><option>Viralizar</option></select></div>
     <div class="field-row">
       <div class="field"><label>Plataforma</label><select id="pc-platform"><option>Instagram</option><option>TikTok</option><option>YouTube</option></select></div>
-      <div class="field"><label>Idioma</label><select id="pc-lang"><option>Português</option><option>Inglês</option><option>Espanhol</option></select></div>
+      <div class="field"><label>Idioma</label><select id="pc-lang"><option>Português</option><option>Inglês</option><option>Espanhol</option><option>Francês</option></select></div>
     </div>
     <div class="field"><label>Assunto do post</label><input id="pc-topic" placeholder="Ex: bastidores de um dia de gravação"></div>
     <div class="field-row">
@@ -1645,7 +1671,8 @@ function postForm(){
     </div>
     <div class="field"><label>Estilo de entrega</label><select id="pc-style">${DELIVERY_STYLE_OPTIONS.map(v=>`<option>${v}</option>`).join('')}</select></div>
     <div class="toggle-row"><span>Incluir call-to-action</span><div class="toggle on" id="pc-cta"><div class="toggle-dot"></div></div></div>
-    <button class="btn btn-primary btn-block" style="margin-top:var(--s5)" id="genPostBtn">${icon('sparkles',16)} Gerar conteúdo</button>
+    <div class="field-hint" style="margin:var(--s3) 0 var(--s4)">Preencha o assunto (e a marca, se for "Para uma marca") antes de gerar — evita gastar sua cota mensal de IA com um pedido incompleto.</div>
+    <button class="btn btn-primary btn-block" id="genPostBtn">${icon('sparkles',16)} Gerar conteúdo</button>
     <div id="postResultBox"></div>`;
 }
 function bindPostGenerate(){
@@ -1655,11 +1682,12 @@ function bindPostGenerate(){
     const topic = val('pc-topic');
     if(!topic){ showToast('Descreva o assunto do post'); return; }
     const f = { purpose: val('pc-purpose'), client: val('pc-client'), goal: val('pc-goal'), platform: val('pc-platform'), lang: val('pc-lang'), topic, format: val('pc-format'), tone: val('pc-tone'), style: val('pc-style'), cta: document.getElementById('pc-cta').classList.contains('on') };
+    if(f.purpose==='Para uma marca' && !f.client){ showToast('Selecione a marca antes de gerar'); return; }
     btn.disabled = true; btn.innerHTML = `<div class="spinner"></div> Gerando...`;
     try{
-      const langMap = { 'Português':'português do Brasil', 'Inglês':'English', 'Espanhol':'español' };
-      const system = `Você é um especialista em criação de conteúdo para redes sociais. Escreva sempre em ${langMap[f.lang]}.`;
-      const user = `Crie um(a) ${f.format} para ${f.platform} sobre "${f.topic}", com tom ${f.tone}, no estilo "${f.style}", cujo objetivo principal é "${f.goal}", ${f.purpose==='Para uma marca' ? ('para divulgar a marca '+(f.client||'')) : 'para o perfil pessoal do criador'}.${f.cta ? ' Termine com uma call-to-action clara alinhada a esse objetivo.' : ''} Inclua também 5 hashtags relevantes.`;
+      const langMap = { 'Português':'português do Brasil', 'Inglês':'English', 'Espanhol':'español', 'Francês':'français' };
+      const system = `Você é um estrategista de conteúdo e social media sênior que cria posts para criadores profissionais — o resultado precisa soar como o trabalho de um especialista, nunca como uma IA genérica. Pense em gancho forte na primeira linha, retenção, e linguagem 100% nativa da plataforma indicada (nunca institucional ou robótica). Evite clichês de IA (ex: "no mundo de hoje", "é importante ressaltar", "em suma"). Escreva sempre em ${langMap[f.lang]}.`;
+      const user = `Crie um(a) ${f.format} para ${f.platform} sobre "${f.topic}", com tom ${f.tone}, no estilo "${f.style}", cujo objetivo principal é "${f.goal}", ${f.purpose==='Para uma marca' ? ('para divulgar a marca '+(f.client||'')) : 'para o perfil pessoal do criador'}.${f.cta ? ' Termine com uma call-to-action clara alinhada a esse objetivo.' : ''} Escreva como um criador de verdade, direto e específico ao assunto — nunca genérico. Inclua também 5 hashtags relevantes ao nicho/assunto (nunca hashtags genéricas tipo #instagood).`;
       const text = await callAI(system, user, 800, 'post');
       document.getElementById('postResultBox').innerHTML = `
         <div class="section-title" style="margin-top:var(--s6)">Conteúdo gerado</div>
@@ -1959,12 +1987,13 @@ function screenSettings(){
         </div>
         <div class="field-row">
           <div class="field"><label>E-mail</label><input id="st-email" value="${esc(p.email||'')}" placeholder="voce@email.com"></div>
-          <div class="field"><label>Endereço completo</label><input id="st-address" value="${esc(p.address||'')}" placeholder="Rua, número, cidade, estado, CEP"></div>
+          <div class="field"><label>Endereço completo</label><input id="st-address" value="${esc(p.address||'')}" placeholder="${addressPlaceholder()}"></div>
         </div>
         <div class="field-row">
           <div class="field"><label>Idioma do app</label><select id="st-lang">${Object.keys(LANG_NAMES).map(k=>`<option value="${k}" ${STATE.language===k?'selected':''}>${LANG_NAMES[k]}</option>`).join('')}</select></div>
           <div class="field"><label>Moeda padrão</label><select id="st-currency">${Object.keys(CURRENCIES).map(c=>`<option value="${c}" ${STATE.currency===c?'selected':''}>${CURRENCIES[c].label}</option>`).join('')}</select></div>
         </div>
+        <div class="field-hint" style="margin-top:-8px;margin-bottom:var(--s4)">País/jurisdição usado nos contratos: <strong style="color:var(--brown-800)">${jurisdiction()}</strong> — muda automaticamente junto com a moeda, assim como o rótulo do documento fiscal acima.</div>
         <div class="field"><label>Meta de receita mensal</label><input id="st-goal" type="number" step="0.01" value="${STATE.goal}"></div>
         <div class="field-hint" style="margin-bottom:var(--s4)">Seus dados (nome, documento, endereço) são usados para preencher automaticamente os contratos gerados por IA. O idioma escolhido aqui muda os textos da Calculadora de Preço (Conteúdo → Preço). A tradução completa do restante do app chega em uma próxima etapa.</div>
         <button class="btn btn-primary" id="saveSettingsBtn">Salvar configurações</button>
@@ -2007,26 +2036,6 @@ function featureInterestAdminSection(){
         </div>`;
       }).join('')}
     </div>`;
-}
-function settingsForm(){
-  const p = STATE.profile;
-  return `
-    <div class="modal-header"><div class="modal-title display">Configurações</div><div class="icon-btn" id="closeModal">${icon('x',16)}</div></div>
-    <div class="field-row">
-      <div class="field"><label>Seu nome/negócio</label><input id="st-name" value="${esc(p.name||'')}" placeholder="Seu nome ou marca"></div>
-      <div class="field"><label>Seu ${docLabel().label}</label><input id="st-doc" value="${esc(p.doc||'')}" placeholder="${docLabel().placeholder}"></div>
-    </div>
-    <div class="field-row">
-      <div class="field"><label>E-mail</label><input id="st-email" value="${esc(p.email||'')}" placeholder="voce@email.com"></div>
-      <div class="field"><label>Endereço completo</label><input id="st-address" value="${esc(p.address||'')}" placeholder="Rua, número, cidade, estado, CEP"></div>
-    </div>
-    <div class="field-row">
-      <div class="field"><label>Idioma do app</label><select id="st-lang">${Object.keys(LANG_NAMES).map(k=>`<option value="${k}" ${STATE.language===k?'selected':''}>${LANG_NAMES[k]}</option>`).join('')}</select></div>
-      <div class="field"><label>Moeda padrão</label><select id="st-currency">${Object.keys(CURRENCIES).map(c=>`<option value="${c}" ${STATE.currency===c?'selected':''}>${CURRENCIES[c].label}</option>`).join('')}</select></div>
-    </div>
-    <div class="field"><label>Meta de receita mensal</label><input id="st-goal" type="number" step="0.01" value="${STATE.goal}"></div>
-    <div class="field-hint" style="margin-bottom:var(--s4)">Seus dados (nome, CPF/CNPJ, endereço) são usados para preencher automaticamente os contratos gerados por IA. O idioma escolhido aqui muda os textos da Calculadora de Preço (Conteúdo → Preço). A tradução completa do restante do app chega em uma próxima etapa.</div>
-    <button class="btn btn-primary btn-block" id="saveSettingsBtn">Salvar configurações</button>`;
 }
 function bindSettingsSave(){
   document.getElementById('saveSettingsBtn').addEventListener('click', async ()=>{
@@ -2288,20 +2297,31 @@ function screenMediaKit(){
           <div class="field"><label>Nome</label><input id="mk-name" value="${esc(up.name||'')}" placeholder="Seu nome ou marca pessoal"></div>
           <div class="field"><label>Nicho</label><select id="mk-niche"><option value="">Nenhum</option>${NICHE_OPTIONS.map(n=>`<option ${up.niche===n?'selected':''}>${n}</option>`).join('')}</select></div>
         </div>
-        <div class="field"><label>Foto de perfil (URL)</label><input id="mk-avatar" value="${esc(up.avatarUrl||'')}" placeholder="https://..."></div>
+        <div class="field"><label>Foto de perfil</label>
+          <div style="display:flex;align-items:center;gap:var(--s3)">
+            <img id="mk-avatar-preview" src="${esc(up.avatarUrl||'')}" style="width:48px;height:48px;border-radius:12px;object-fit:cover;border:1px solid var(--border);flex-shrink:0;${up.avatarUrl?'':'display:none'}">
+            <input type="hidden" id="mk-avatar" value="${esc(up.avatarUrl||'')}">
+            <input type="file" accept="image/*" id="mk-avatar-upload" style="flex:1">
+          </div>
+          <div class="field-hint">JPG ou PNG, até 5MB.</div>
+        </div>
         <div class="field"><label>Bio curta</label><textarea id="mk-bio" rows="2">${esc(up.bio||'')}</textarea></div>
         <div class="field"><label>Contato (e-mail, WhatsApp ou link)</label><input id="mk-contact" value="${esc(up.contact||'')}" placeholder="voce@email.com ou 5511999999999"></div>
       </div>
       <div class="section-title">Mídia Kit</div>
       <div class="card">
         <div class="field"><label>Bio estendida (exibida no topo do kit)</label><textarea id="mk-bioext" rows="3">${esc(mk.bioExtendida||'')}</textarea></div>
-        <div class="field"><label>Foto de capa (URL)</label><input id="mk-capa" value="${esc(mk.fotoCapaUrl||'')}" placeholder="https://..."></div>
-        <div class="field-hint" style="margin-bottom:var(--s4)">Upload de arquivo ainda não é suportado — cole o link de uma imagem já hospedada.</div>
+        <div class="field"><label>Foto de capa</label>
+          <img id="mk-capa-preview" src="${esc(mk.fotoCapaUrl||'')}" style="width:100%;height:80px;border-radius:12px;object-fit:cover;border:1px solid var(--border);margin-bottom:var(--s3);${mk.fotoCapaUrl?'':'display:none'}">
+          <input type="hidden" id="mk-capa" value="${esc(mk.fotoCapaUrl||'')}">
+          <input type="file" accept="image/*" id="mk-capa-upload">
+          <div class="field-hint" style="margin-bottom:var(--s4)">JPG ou PNG, até 5MB. Recomendado formato paisagem (ex: 1200x400).</div>
+        </div>
       </div>
       <div class="section-title">Demografia do público (opcional)</div>
       <div class="card">
         <div class="field-row">
-          <div class="field"><label>Faixa etária</label><input id="mk-faixa" value="${esc(mk.publicoFaixaEtaria||'')}" placeholder="Ex: 18-34 anos"></div>
+          <div class="field"><label>Faixa etária predominante</label><select id="mk-faixa"><option value="">Não informado</option>${AGE_RANGE_OPTIONS.map(a=>`<option ${mk.publicoFaixaEtaria===a?'selected':''}>${a}</option>`).join('')}</select></div>
           <div class="field"><label>Gênero</label><input id="mk-genero" value="${esc(mk.publicoGenero||'')}" placeholder="Ex: 70% mulheres"></div>
         </div>
         <div class="field"><label>Localização</label><input id="mk-local" value="${esc(mk.publicoLocalizacao||'')}" placeholder="Ex: 60% Brasil, 20% Portugal"></div>
@@ -2351,6 +2371,24 @@ function bindMediaKitScreen(){
   ['mk-name','mk-avatar','mk-niche','mk-bio','mk-contact','mk-bioext','mk-capa','mk-faixa','mk-genero','mk-local'].forEach(id=>{
     const el = document.getElementById(id);
     el?.addEventListener('input', refresh); el?.addEventListener('change', refresh);
+  });
+  document.getElementById('mk-avatar-upload')?.addEventListener('change', async (e)=>{
+    const file = e.target.files[0]; if(!file) return;
+    try{
+      const url = await uploadMediaKitPhoto(file, 'avatar');
+      document.getElementById('mk-avatar').value = url;
+      const img = document.getElementById('mk-avatar-preview'); img.src = url; img.style.display = '';
+      refresh(); showToast('Foto enviada');
+    }catch(err){ showToast('Erro ao enviar foto: ' + err.message); }
+  });
+  document.getElementById('mk-capa-upload')?.addEventListener('change', async (e)=>{
+    const file = e.target.files[0]; if(!file) return;
+    try{
+      const url = await uploadMediaKitPhoto(file, 'capa');
+      document.getElementById('mk-capa').value = url;
+      const img = document.getElementById('mk-capa-preview'); img.src = url; img.style.display = '';
+      refresh(); showToast('Foto enviada');
+    }catch(err){ showToast('Erro ao enviar foto: ' + err.message); }
   });
   document.getElementById('mkAddCaseBtn')?.addEventListener('click', ()=>{ mkCasesDraft.push({ marca:'', descricao:'', link:'' }); render(); });
   document.querySelectorAll('[data-mk-case-field]').forEach(el=> el.addEventListener('input', (e)=>{

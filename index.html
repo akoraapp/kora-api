@@ -646,7 +646,7 @@ async function deleteTiktokInSupabase(id){
 
 /* ---- Preço (estimates salvas) — persistência real via Supabase ---- */
 function mapEstimateRow(row){
-  return { id: row.id, date: row.created_at ? row.created_at.slice(0,10) : '', total: Number(row.total)||0, style: row.style||'', platform: row.platform||'', qty: row.qty||'' };
+  return { id: row.id, date: row.created_at ? row.created_at.slice(0,10) : '', total: Number(row.total)||0, style: row.style||'', platform: row.platform||'', qty: row.qty||'', currency: row.currency||'USD' };
 }
 async function loadEstimatesFromSupabase(){
   if(!AUTH.workspaceId){ STATE.estimates = []; return; }
@@ -657,7 +657,7 @@ async function loadEstimatesFromSupabase(){
 async function createEstimateInSupabase(data){
   const { data: row, error } = await sb.from('estimates').insert({
     workspace_id: AUTH.workspaceId, style: data.style, platform: data.platform, qty: data.qty,
-    total: data.total, currency: STATE.currency||'USD',
+    total: data.total, currency: data.currency || STATE.currency || 'USD',
   }).select().single();
   if(error) throw error;
   return mapEstimateRow(row);
@@ -1816,6 +1816,7 @@ function opts(labels, values, selectedIdx, showSub){
 function contentPricing(){
   const L = pl(); const lang = STATE.language;
   return `
+    <div class="field"><label>Moeda</label><select id="pr-currency">${Object.keys(CURRENCIES).map(c=>`<option value="${c}" ${STATE.currency===c?'selected':''}>${CURRENCIES[c].label}</option>`).join('')}</select></div>
     <div class="field"><label>${L.tier}</label><select id="pr-tier">${opts(TIER_LABELS[lang], TIER_VALUES, 1)}</select></div>
     <div class="field-row">
       <div class="field"><label>${L.style}</label><select id="pr-style">${opts(STYLE_LABELS[lang], STYLE_VALUES, 0)}</select></div>
@@ -1839,6 +1840,7 @@ function bindPricing(){
   ['pr-script','pr-voice','pr-raw','pr-edit','pr-retainer'].forEach(bindToggle);
   document.getElementById('calcPriceBtn').addEventListener('click', ()=>{
     const L = pl();
+    const currency = val('pr-currency') || STATE.currency || 'BRL';
     const base = 220;
     const tier = parseFloat(val('pr-tier')||1), qty = parseInt(val('pr-qty')||1);
     const complexity = parseFloat(val('pr-complexity')||1), usage = parseFloat(val('pr-usage')||1), speed = parseFloat(val('pr-speed')||1);
@@ -1856,17 +1858,17 @@ function bindPricing(){
     if(retainerOn) total = total * 3.5;
     const low = total * 0.88, high = total * 1.3;
     const pctUsage = Math.round((usage-1)*100), pctComplexity = Math.round((complexity-1)*100), pctSpeed = Math.round((speed-1)*100);
-    STATE._lastEstimate = { total, low, high, tier, style, platform, qty, complexity, usage, speed, extras, scriptOn, voiceOn, rawOn, editOn, retainerOn, creativeBase };
+    STATE._lastEstimate = { total, low, high, tier, style, platform, qty, complexity, usage, speed, extras, scriptOn, voiceOn, rawOn, editOn, retainerOn, creativeBase, currency };
     document.getElementById('priceResultBox').innerHTML = `
       <div class="section-title" style="margin-top:var(--s6)">${L.marketEval}</div>
       <div class="price-result">
         <div class="stat-label" style="color:rgba(255,255,255,0.75)">${L.suggestedRate}</div>
-        <div class="amount">${fmtBRL(total)}</div>
-        <div style="font-size:12px;color:rgba(255,255,255,0.75)">${L.recRange}: ${fmtBRL(low)} – ${fmtBRL(high)}</div>
+        <div class="amount">${fmtCur(total,currency)}</div>
+        <div style="font-size:12px;color:rgba(255,255,255,0.75)">${L.recRange}: ${fmtCur(low,currency)} – ${fmtCur(high,currency)}</div>
         <div class="range-track"><div class="range-fill" style="left:20%;width:35%"></div></div>
         <div class="price-breakdown">
-          <div><span>${L.creativeBase}</span><span>${fmtBRL(creativeBase)}</span></div>
-          <div><span>${L.extras}</span><span>${fmtBRL(extras)}</span></div>
+          <div><span>${L.creativeBase}</span><span>${fmtCur(creativeBase,currency)}</span></div>
+          <div><span>${L.extras}</span><span>${fmtCur(extras,currency)}</span></div>
           <div><span>${L.quantity}</span><span>×${qty}</span></div>
           ${retainerOn ? `<div><span>${L.retainerPkg}</span><span>×3.5</span></div>` : ''}
         </div>
@@ -1890,7 +1892,7 @@ function bindPricing(){
     });
     document.getElementById('createDealBtn').addEventListener('click', ()=>{ closeModalIfOpen(); openModal(contentForm(null), ()=>bindContentSave(null)); });
     document.getElementById('saveEstimateBtn').addEventListener('click', async ()=>{
-      try{ const saved = await createEstimateInSupabase({ total, style, platform, qty }); STATE.estimates.unshift(saved); showToast('Estimativa salva'); }
+      try{ const saved = await createEstimateInSupabase({ total, style, platform, qty, currency }); STATE.estimates.unshift(saved); showToast('Estimativa salva'); }
       catch(e){ showToast('Erro ao salvar estimativa: ' + e.message); }
     });
   });
@@ -1904,7 +1906,7 @@ function proposalForm(estimate){
     <div class="modal-header"><div class="modal-title display">Gerar Proposta</div><div class="icon-btn" id="closeModal">${icon('x',16)}</div></div>
     <div class="field"><label>Cliente</label><select id="pp-client"><option value="">Nenhum</option>${clientOptions}</select></div>
     <div class="field-row">
-      <div class="field"><label>Moeda</label><select id="pp-currency">${Object.keys(CURRENCIES).map(c=>`<option value="${c}">${CURRENCIES[c].label}</option>`).join('')}</select></div>
+      <div class="field"><label>Moeda</label><select id="pp-currency">${Object.keys(CURRENCIES).map(c=>`<option value="${c}" ${(estimate&&estimate.currency||STATE.currency)===c?'selected':''}>${CURRENCIES[c].label}</option>`).join('')}</select></div>
       <div class="field"><label>Valor</label><input id="pp-amount" type="number" step="0.01" value="${estimate?estimate.total.toFixed(2):''}"></div>
     </div>
     <button class="btn btn-primary btn-block" id="genProposalDoc">${icon('sparkles',16)} Gerar texto da proposta</button>
@@ -2385,7 +2387,7 @@ function mkStaticParts(){
   return {
     metrics: computeLatestMetricsByPlatform(STATE.performance),
     cases: STATE.clients.filter(c=>c.status==='Finalizado').map(c=>({ name:c.name, notes:c.notes })),
-    packages: STATE.estimates.map(e=>({ style:e.style, platform:e.platform, qty:e.qty, total:e.total, currency: STATE.currency })),
+    packages: STATE.estimates.map(e=>({ style:e.style, platform:e.platform, qty:e.qty, total:e.total, currency: e.currency||STATE.currency })),
   };
 }
 function mkDataFromState(){

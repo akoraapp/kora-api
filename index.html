@@ -359,6 +359,9 @@ function fmtBRL(v){ return fmtCur(v, STATE.currency||'BRL'); }
 function sameMonth(dateStr, month, year){ if(!dateStr) return false; const d = new Date(dateStr); return d.getMonth()===month && d.getFullYear()===year; }
 function fmtDate(d){ if(!d) return ''; const [y,m,day] = d.split('-'); return `${day}/${m}`; }
 function esc(s){ return (s||'').toString().replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+// Nome público (users.name/full_name, preenchido no cadastro) tem prioridade sobre o nome
+// legal usado nos contratos (STATE.profile, ainda em window.storage).
+function displayName(){ return (STATE.userProfile && STATE.userProfile.name) || STATE.profile.name || 'Creator'; }
 function emptyState(iconName,title,desc){ return `<div class="empty-state">${icon(iconName,40,'#C4A098')}<div class="title">${title}</div><div class="desc">${desc}</div></div>`; }
 
 /* ---------- Storage ---------- */
@@ -372,7 +375,7 @@ async function loadAll(){
     if(res){ const s = JSON.parse(res.value); STATE.language = s.language||'pt'; STATE.currency = s.currency||'BRL'; STATE.goal = s.goal||20000; STATE.referralCode = s.referralCode||''; }
   }catch(e){ /* keep defaults */ }
   if(!STATE.referralCode){
-    const base = (STATE.profile.name||'creator').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9]/g,'').slice(0,10) || 'creator';
+    const base = displayName().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9]/g,'').slice(0,10) || 'creator';
     STATE.referralCode = base + Math.random().toString(36).slice(2,6);
     await saveSettings();
   }
@@ -789,8 +792,8 @@ function renderNav(){
       ${NAV.map(n => `<div class="sidebar-item ${STATE.tab===n.id?'active':''}" data-tab="${n.id}">${icon(n.icon,19)}<span>${n.label}</span></div>`).join('')}
     </div>
     <div class="sidebar-footer" id="sidebarProfile">
-      <div class="avatar" style="width:32px;height:32px;font-size:12px">${(STATE.profile.name||'C').charAt(0).toUpperCase()}</div>
-      <div><div class="name">${esc(STATE.profile.name||'Creator')}</div><div class="role">Ver perfil</div></div>
+      <div class="avatar" style="width:32px;height:32px;font-size:12px">${displayName().charAt(0).toUpperCase()}</div>
+      <div><div class="name">${esc(displayName())}</div><div class="role">Ver perfil</div></div>
     </div>`;
   nav.querySelectorAll('.sidebar-item').forEach(el=>{ el.addEventListener('click', ()=>{ STATE.tab = el.dataset.tab; STATE.clientDetailId=null; render(); }); });
   document.getElementById('sidebarProfile').addEventListener('click', ()=>{ STATE.tab='settings'; STATE.clientDetailId=null; render(); });
@@ -800,7 +803,7 @@ function topbar(sub, backAction){
     return `<div class="topbar"><div class="topbar-back"><div class="icon-btn" id="btnBack">${icon('back',18,'#4A2E2A')}</div><div><div class="greet display" style="font-size:19px">${sub.title}</div><div class="sub">${sub.subtitle||''}</div></div></div></div>`;
   }
   const notifCount = getNotifications().length;
-  return `<div class="topbar"><div><div class="greet display">Olá, ${esc(STATE.profile.name||'Creator')}</div><div class="sub">${sub}</div></div><div class="topbar-actions"><div class="icon-btn" id="bellBtn" style="position:relative">${icon('bell',18,'#4A2E2A')}${notifCount>0?`<span style="position:absolute;top:-4px;right:-4px;background:var(--coral-500);color:#fff;font-size:9px;font-weight:700;min-width:16px;height:16px;border-radius:8px;display:flex;align-items:center;justify-content:center;padding:0 3px">${notifCount}</span>`:''}</div><div class="avatar" id="avatarBtn" style="cursor:pointer">${(STATE.profile.name||'C').charAt(0).toUpperCase()}</div></div></div>`;
+  return `<div class="topbar"><div><div class="greet display">Olá, ${esc(displayName())}</div><div class="sub">${sub}</div></div><div class="topbar-actions"><div class="icon-btn" id="bellBtn" style="position:relative">${icon('bell',18,'#4A2E2A')}${notifCount>0?`<span style="position:absolute;top:-4px;right:-4px;background:var(--coral-500);color:#fff;font-size:9px;font-weight:700;min-width:16px;height:16px;border-radius:8px;display:flex;align-items:center;justify-content:center;padding:0 3px">${notifCount}</span>`:''}</div><div class="avatar" id="avatarBtn" style="cursor:pointer">${displayName().charAt(0).toUpperCase()}</div></div></div>`;
 }
 
 /* ---- Notifications ---- */
@@ -897,9 +900,8 @@ function executionCard(){
   const actions = getExecutionActions();
   const n = actions.length;
   return `
-    <div class="card" style="background:var(--brown-600);color:#fff;margin-top:var(--s5)">
-      <div class="stat-label" style="color:rgba(255,255,255,0.7)">Lista do Dia</div>
-      <div style="font-family:'Playfair Display';font-size:20px;font-weight:700;margin:2px 0 var(--s3)">${n>0 ? `Você tem ${n} ${n===1?'ação':'ações'} para hoje` : 'Tudo em dia por aqui'}</div>
+    <div class="card" style="background:var(--brown-600);color:#fff">
+      <div style="font-family:'Playfair Display';font-size:20px;font-weight:700;margin-bottom:var(--s3)">${n>0 ? `Você tem ${n} ${n===1?'ação':'ações'} para hoje` : 'Tudo em dia por aqui'}</div>
       ${n>0 ? `
         <div style="display:flex;flex-direction:column;gap:5px;margin-bottom:var(--s4)">
           ${actions.slice(0,3).map(a=>`<div style="font-size:12px;color:rgba(255,255,255,0.85)">• ${esc(a.title)}</div>`).join('')}
@@ -974,7 +976,6 @@ function screenHome(){
   const pendingTotal = pending.reduce((s,t)=> t.type==='Receita' ? s+Number(t.amount) : s, 0);
   const goal = STATE.goal || 0; const goalPct = goal>0 ? Math.min(100, Math.round((income/goal)*100)) : 0;
   const todayStr = now.toISOString().slice(0,10);
-  const todayContent = STATE.content.filter(c=>c.dueDate===todayStr);
   const upcoming = STATE.content.filter(c=>c.dueDate && c.dueDate>=todayStr).sort((a,b)=>a.dueDate.localeCompare(b.dueDate)).slice(0,4);
 
   return `
@@ -985,11 +986,6 @@ function screenHome(){
         <div class="stat-card"><div class="stat-label">Pagamentos pendentes</div><div class="stat-value coral">${fmtBRL(pendingTotal)}</div>
           <div class="stat-delta" style="color:var(--text-secondary)">${pending.length} em aberto</div></div>
       </div>
-      ${todayContent.length ? `
-      <div class="card" style="border:1px solid var(--brown-300);background:var(--surface);margin-top:var(--s4)">
-        <div class="stat-label" style="margin-bottom:var(--s3)">${icon('calendar',13)} Sai hoje</div>
-        ${todayContent.map(c=>`<div class="list-item"><div class="list-icon">${icon('calendar',18)}</div><div style="flex:1"><div class="list-title">${esc(c.title)}</div><div class="list-sub">${esc(c.platform||'')}${c.client?(' · '+esc(c.client)):''}</div></div><span class="badge badge-producao">${esc(c.status)}</span></div>`).join('')}
-      </div>` : ''}
       <div class="goal-card" id="goalCard">
         <div class="top-row">
           <div>
@@ -1003,6 +999,7 @@ function screenHome(){
       </div>
       <div class="section-title">Ações rápidas</div>
       <div class="quick-actions">${qa('plus','Cliente','clients')}${qa('calendar','Conteúdo','content','fluxo')}${qa('dollar','Lançamento','finance')}${qa('wand','IA Studio','content','ia')}</div>
+      <div class="section-title">Lista do Dia</div>
       ${executionCard()}
       <div class="section-title">Próximas entregas <span class="see-all" data-goto="content" data-sub="fluxo">Ver tudo</span></div>
       ${upcoming.length ? `<div class="card">${upcoming.map(c=>`<div class="list-item"><div class="list-icon">${icon('calendar',18)}</div><div><div class="list-title">${esc(c.title)}</div><div class="list-sub">${esc(c.status)} ${c.client?('· '+esc(c.client)):''}</div></div><div class="list-right">${fmtDate(c.dueDate)}</div></div>`).join('')}</div>` : emptyState('calendar','Nenhuma entrega agendada','Crie um conteúdo com prazo para ele aparecer aqui.')}
@@ -2807,6 +2804,7 @@ function screenAuth(){
         <div class="auth-brand"><span class="dot"></span> AKORA</div>
         <div class="secondary" style="margin-bottom:var(--s6)">${authMode==='signin' ? 'Entre pra continuar.' : 'Crie sua conta pra começar.'}</div>
         <div id="authErrorBox"></div>
+        ${authMode==='signup' ? `<div class="field"><label>Seu nome</label><input id="auth-name" placeholder="Como quer ser chamada(o) no app"></div>` : ''}
         <div class="field"><label>E-mail</label><input id="auth-email" type="email" placeholder="voce@email.com"></div>
         <div class="field"><label>Senha</label><input id="auth-password" type="password" placeholder="Mínimo 6 caracteres"></div>
         <button class="btn btn-primary btn-block" id="authSubmit" style="margin-bottom:var(--s3)">${authMode==='signin' ? 'Entrar' : 'Criar conta'}</button>
@@ -2833,7 +2831,9 @@ function bindAuthScreen(){
         if(error) throw error;
         await bootstrapAfterAuth();
       } else {
-        const { data, error } = await sb.auth.signUp({ email, password });
+        const name = val('auth-name');
+        if(!name){ errorBox.innerHTML = `<div class="auth-error">Preencha seu nome</div>`; btn.disabled = false; return; }
+        const { data, error } = await sb.auth.signUp({ email, password, options: { data: { full_name: name } } });
         if(error) throw error;
         if(data.session){
           await bootstrapAfterAuth();

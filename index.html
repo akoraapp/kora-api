@@ -262,7 +262,7 @@ const SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_UBqeJZfHCRB74YzoDwsSDQ_HtoRM6xB
 const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
 let AUTH = { session:null, workspaceId:null };
 
-let STATE = { clients:[], content:[], ideas:[], transactions:[], tiktok:[], contracts:[], estimates:[], performance:[], referrals:[], feature_interest_content_approval:[], profile:{}, userProfile:{}, mediaKit:null, language:'pt', currency:'BRL', goal:20000, referralCode:'', tab:'home', clientDetailId:null, financeSub:'geral', tiktokSub:'produtos', moreView:null };
+let STATE = { clients:[], content:[], ideas:[], transactions:[], tiktok:[], contracts:[], estimates:[], performance:[], referrals:[], feature_interest_content_approval:[], profile:{}, userProfile:{}, mediaKit:null, aiUsage:null, language:'pt', currency:'BRL', goal:20000, referralCode:'', tab:'home', clientDetailId:null, financeSub:'geral', tiktokSub:'produtos', moreView:null };
 const CURRENCIES = { BRL:{symbol:'R$', label:'Real (BRL)'}, USD:{symbol:'$', label:'Dólar (USD)'}, CAD:{symbol:'C$', label:'Dólar canadense (CAD)'}, EUR:{symbol:'€', label:'Euro (EUR)'}, GBP:{symbol:'£', label:'Libra (GBP)'}, MXN:{symbol:'$', label:'Peso mexicano (MXN)'}, ARS:{symbol:'$', label:'Peso argentino (ARS)'} };
 const DOC_LABELS = {
   BRL: { label:'CPF ou CNPJ', placeholder:'000.000.000-00 ou 00.000.000/0001-00' },
@@ -375,6 +375,7 @@ async function loadAll(){
   await loadFeatureInterestFromSupabase();
   await loadUserProfileFromSupabase();
   await loadMediaKitFromSupabase();
+  await loadAIUsageFromSupabase();
 }
 
 /* ---- Clientes (brands) \u2014 persist\u00eancia real via Supabase, escopada por workspace ---- */
@@ -655,7 +656,7 @@ async function createEstimateInSupabase(data){
    Separado do STATE.profile (nome legal + documento fiscal usados nos contratos,
    que seguem em window.storage): este é o perfil público exibido no Mídia Kit. */
 function mapUserProfileRow(row){
-  return { name: row.name||row.full_name||'', avatarUrl: row.avatar_url||'', bio: row.bio||'', niche: row.niche||'', contact: row.contact||'' };
+  return { name: row.name||row.full_name||'', avatarUrl: row.avatar_url||'', bio: row.bio||'', niche: row.niche||'', contact: row.contact||'', plan: row.plan||'free' };
 }
 async function loadUserProfileFromSupabase(){
   if(!AUTH.session){ STATE.userProfile = {}; return; }
@@ -710,6 +711,19 @@ async function fetchPublicMediaKit(slug){
   return data;
 }
 
+/* ---- Uso mensal de IA (mesma regra da Edge Function, só pra exibir em Configurações) ---- */
+const AI_PLAN_LIMITS = { free: 10, pro: 100 };
+async function loadAIUsageFromSupabase(){
+  if(!AUTH.workspaceId){ STATE.aiUsage = null; return; }
+  const plan = (STATE.userProfile && STATE.userProfile.plan) || 'free';
+  const limit = AI_PLAN_LIMITS[plan] ?? AI_PLAN_LIMITS.free;
+  const startOfMonth = new Date(); startOfMonth.setUTCDate(1); startOfMonth.setUTCHours(0,0,0,0);
+  const { count, error } = await sb.from('ai_generations').select('id', { count:'exact', head:true })
+    .eq('workspace_id', AUTH.workspaceId).gte('created_at', startOfMonth.toISOString());
+  if(error){ STATE.aiUsage = null; return; }
+  STATE.aiUsage = { used: count||0, limit, plan };
+}
+
 async function saveSettings(){
   try{ await window.storage.set('akora:settings', JSON.stringify({ language: STATE.language, currency: STATE.currency, goal: STATE.goal, referralCode: STATE.referralCode })); }
   catch(e){ showToast('Erro ao salvar configurações'); }
@@ -727,12 +741,19 @@ function showToast(msg){ const t = document.getElementById('toast'); t.textConte
    Chama a Edge Function ai-proxy (Supabase) em vez de bater direto na API da
    Anthropic pelo browser — a API key fica só no servidor, e a function exige
    um JWT de usuário autenticado (verify_jwt). */
-async function callAI(systemPrompt, userPrompt, maxTokens){
+async function callAI(systemPrompt, userPrompt, maxTokens, feature){
   const { data, error } = await sb.functions.invoke('ai-proxy', {
-    body: { system: systemPrompt, prompt: userPrompt, maxTokens: maxTokens||1200 },
+    body: { system: systemPrompt, prompt: userPrompt, maxTokens: maxTokens||1200, feature: feature||'geral' },
   });
-  if(error) throw new Error(error.message || 'Erro na IA');
+  if(error){
+    // supabase-js só preenche `error` em respostas não-2xx (ex: limite mensal atingido) —
+    // a mensagem real vem no corpo da resposta, não em error.message.
+    let msg = error.message || 'Erro na IA';
+    try{ if(error.context && typeof error.context.json==='function'){ const b = await error.context.json(); if(b && b.error) msg = b.error; } }catch(e2){ /* mantém msg genérica */ }
+    throw new Error(msg);
+  }
   if(data && data.error) throw new Error(data.error);
+  if(data && data.usage) STATE.aiUsage = data.usage;
   return (data && data.text) || '';
 }
 
@@ -804,7 +825,7 @@ async function bindAssistant(){
   try{
     const system = "Você é a assistente virtual dentro do app AKORA, que ajuda criadores de conteúdo a organizar clientes, conteúdos, prazos e finanças. Fale em português do Brasil, num tom acolhedor, direto e profissional, como uma assistente pessoal avisando a criadora sobre o que precisa de atenção. Máximo 3 frases curtas.";
     const user = `Aqui estão as pendências reais da criadora agora: ${list.map(n=>`${n.title} (${n.sub})`).join('; ')}. Resuma isso como um aviso da assistente, priorizando o mais urgente primeiro.`;
-    const text = await callAI(system, user);
+    const text = await callAI(system, user, 400, 'assistente');
     const box = document.getElementById('assistantSummaryText');
     if(box) box.textContent = text;
   }catch(e){
@@ -1275,7 +1296,7 @@ Multa por atraso: ${fields.latefee}
 Política de cancelamento: ${fields.cancel}
 Foro: ${fields.foro || 'a definir conforme domicílio do contratado'}
 Valor total: ${fmtBRL(fields.amount)}`;
-      const text = await callAI(system, user);
+      const text = await callAI(system, user, 1200, 'contrato');
       document.getElementById('contractResultBox').innerHTML = `
         <div class="section-title" style="margin-top:var(--s6)">Contrato gerado</div>
         <div class="ai-result" id="contractText" contenteditable="true">${esc(text)}</div>
@@ -1553,7 +1574,7 @@ function bindScriptGenerate(){
       const langMap = { 'Português':'português do Brasil', 'Inglês':'English', 'Espanhol':'español' };
       const system = `Você é um roteirista especialista em conteúdo de criadores digitais. Escreva sempre no idioma solicitado: ${langMap[f.lang]}.`;
       const user = `Escreva um roteiro de ${f.type} para ${f.platform}, com duração de ${f.duration}, sobre o tema "${f.topic}", nicho ${f.niche||'geral'}, com objetivo de ${f.objective}, no estilo "${f.voiceover}".${f.client?(' O conteúdo é para a marca '+f.client+'.'):''} Estruture com: Gancho (primeiros 3s), Desenvolvimento, Call to action final. Seja direto e pronto para gravar.`;
-      const text = await callAI(system, user);
+      const text = await callAI(system, user, 1200, 'roteiro');
       document.getElementById('scriptResultBox').innerHTML = `
         <div class="section-title" style="margin-top:var(--s6)">Roteiro gerado</div>
         <div class="ai-result" id="scriptText" contenteditable="true">${esc(text)}</div>
@@ -1596,7 +1617,7 @@ function bindBriefingGenerate(){
     try{
       const system = "Você é um estrategista de marketing de influência que ajuda criadores de conteúdo a montar briefings profissionais para apresentar a marcas.";
       const user = `Monte um briefing de campanha profissional e bem estruturado com: ${f.client?('marca '+f.client+', '):''}objetivo "${f.goal}", público-alvo "${f.audience}", mensagem principal "${f.message}", entregáveis "${f.deliverables}", tom de voz "${f.tone}". Estruture com seções claras: Visão Geral, Público-alvo, Mensagem-chave, Entregáveis, Tom e Estilo, Cronograma sugerido.`;
-      const text = await callAI(system, user);
+      const text = await callAI(system, user, 1200, 'briefing');
       document.getElementById('briefingResultBox').innerHTML = `
         <div class="section-title" style="margin-top:var(--s6)">Briefing gerado</div>
         <div class="ai-result" id="briefingText" contenteditable="true">${esc(text)}</div>
@@ -1639,7 +1660,7 @@ function bindPostGenerate(){
       const langMap = { 'Português':'português do Brasil', 'Inglês':'English', 'Espanhol':'español' };
       const system = `Você é um especialista em criação de conteúdo para redes sociais. Escreva sempre em ${langMap[f.lang]}.`;
       const user = `Crie um(a) ${f.format} para ${f.platform} sobre "${f.topic}", com tom ${f.tone}, no estilo "${f.style}", cujo objetivo principal é "${f.goal}", ${f.purpose==='Para uma marca' ? ('para divulgar a marca '+(f.client||'')) : 'para o perfil pessoal do criador'}.${f.cta ? ' Termine com uma call-to-action clara alinhada a esse objetivo.' : ''} Inclua também 5 hashtags relevantes.`;
-      const text = await callAI(system, user);
+      const text = await callAI(system, user, 800, 'post');
       document.getElementById('postResultBox').innerHTML = `
         <div class="section-title" style="margin-top:var(--s6)">Conteúdo gerado</div>
         <div class="ai-result" id="postText" contenteditable="true">${esc(text)}</div>
@@ -1762,7 +1783,7 @@ function bindProposalGenerate(estimate){
     try{
       const system = "Você é um assistente de negócios para criadores de conteúdo. Escreva propostas comerciais claras, profissionais e persuasivas em português.";
       const user = `Escreva uma proposta comercial curta e profissional${client?(' para a marca '+client):''}, propondo um pacote de conteúdo do tipo ${estimate?.style||''} para ${estimate?.platform||''}, quantidade ${estimate?.qty||1}, pelo valor de ${fmtCur(amount,currency)}. Inclua uma breve justificativa de valor e próximos passos.`;
-      const text = await callAI(system, user);
+      const text = await callAI(system, user, 600, 'proposta');
       document.getElementById('proposalResultBox').innerHTML = `
         <div class="section-title" style="margin-top:var(--s6)">Proposta gerada</div>
         <div class="ai-result" id="proposalText" contenteditable="true">${esc(text)}</div>
@@ -1955,6 +1976,13 @@ function screenSettings(){
           <button class="btn btn-secondary btn-sm" id="signOutBtn">Sair</button>
         </div>
       </div>
+      ${STATE.aiUsage ? `
+      <div class="card">
+        <div class="stat-label" style="margin-bottom:var(--s2)">Gerações de IA usadas este mês (plano ${esc(STATE.aiUsage.plan)})</div>
+        <div class="display" style="font-size:22px;color:var(--brown-800)">${STATE.aiUsage.used} de ${STATE.aiUsage.limit}</div>
+        <div class="progress-track"><div class="progress-fill" style="width:${Math.min(100, Math.round(STATE.aiUsage.used/STATE.aiUsage.limit*100))}%"></div></div>
+        <div class="field-hint" style="margin-top:var(--s2)">Vale para roteiro, contrato, briefing, post, proposta e o assistente do sino. Reseta todo início de mês.</div>
+      </div>` : ''}
       ${featureInterestAdminSection()}
     </main>`;
 }

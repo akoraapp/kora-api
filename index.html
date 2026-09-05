@@ -975,8 +975,6 @@ function screenHome(){
   const pending = STATE.transactions.filter(t=>t.status==='Pendente');
   const pendingTotal = pending.reduce((s,t)=> t.type==='Receita' ? s+Number(t.amount) : s, 0);
   const goal = STATE.goal || 0; const goalPct = goal>0 ? Math.min(100, Math.round((income/goal)*100)) : 0;
-  const todayStr = now.toISOString().slice(0,10);
-  const upcoming = STATE.content.filter(c=>c.dueDate && c.dueDate>=todayStr).sort((a,b)=>a.dueDate.localeCompare(b.dueDate)).slice(0,4);
 
   return `
     ${topbar('Bem-vindo ao seu hub criativo.')}
@@ -1001,8 +999,6 @@ function screenHome(){
       <div class="quick-actions">${qa('plus','Cliente','clients')}${qa('calendar','Conteúdo','content','fluxo')}${qa('dollar','Lançamento','finance')}${qa('wand','IA Studio','content','ia')}</div>
       <div class="section-title">Lista do Dia</div>
       ${executionCard()}
-      <div class="section-title">Próximas entregas <span class="see-all" data-goto="content" data-sub="fluxo">Ver tudo</span></div>
-      ${upcoming.length ? `<div class="card">${upcoming.map(c=>`<div class="list-item"><div class="list-icon">${icon('calendar',18)}</div><div><div class="list-title">${esc(c.title)}</div><div class="list-sub">${esc(c.status)} ${c.client?('· '+esc(c.client)):''}</div></div><div class="list-right">${fmtDate(c.dueDate)}</div></div>`).join('')}</div>` : emptyState('calendar','Nenhuma entrega agendada','Crie um conteúdo com prazo para ele aparecer aqui.')}
       <div class="section-title">Painel de Conteúdo</div>
       ${contentPanel()}
       <div class="section-title">Resumo financeiro</div>

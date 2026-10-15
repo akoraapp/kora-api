@@ -187,6 +187,32 @@
   .auth-brand{ font-family:'Playfair Display'; font-weight:700; font-size:24px; color:var(--brown-800); display:flex; align-items:center; gap:10px; margin-bottom:var(--s2); }
   .auth-brand .dot{ width:10px; height:10px; border-radius:50%; background:var(--coral-500); }
   .auth-error{ background:var(--coral-50); color:var(--coral-800); font-size:13px; padding:10px 14px; border-radius:10px; margin-bottom:var(--s4); }
+  /* ---- Mídia Kit ---- */
+  .mk-grid{ display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:var(--s5); align-items:start; }
+  @media(max-width:1100px){ .mk-grid{ grid-template-columns:1fr; } }
+  .mk-preview-wrap{ position:sticky; top:var(--s4); }
+  .mk-doc{ background:#fff; border:1px solid var(--border); border-radius:20px; overflow:hidden; }
+  .mk-cover{ height:150px; background:var(--brown-100) center/cover no-repeat; }
+  .mk-head{ padding:0 var(--s6) var(--s5); margin-top:-40px; }
+  .mk-avatar{ width:84px; height:84px; border-radius:50%; border:4px solid #fff; background:var(--brown-600) center/cover no-repeat; color:#fff; display:flex; align-items:center; justify-content:center; font-size:28px; font-weight:600; }
+  .mk-name{ font-family:'Playfair Display'; font-weight:700; font-size:26px; color:var(--brown-800); margin-top:var(--s3); }
+  .mk-niche{ font-size:13px; color:var(--text-secondary); margin-top:2px; }
+  .mk-bio{ font-size:14px; line-height:1.6; color:var(--text-primary); margin-top:var(--s3); white-space:pre-line; }
+  .mk-sec{ padding:var(--s5) var(--s6); border-top:1px solid var(--border); }
+  .mk-sec h3{ font-family:'Playfair Display'; font-size:17px; color:var(--brown-800); margin-bottom:var(--s3); }
+  .mk-metrics{ display:grid; grid-template-columns:repeat(auto-fill,minmax(150px,1fr)); gap:var(--s3); }
+  .mk-metric{ background:var(--surface); border-radius:14px; padding:var(--s3) var(--s4); }
+  .mk-metric .k{ font-size:11px; color:var(--text-secondary); font-weight:600; } .mk-metric .v{ font-size:20px; font-weight:700; color:var(--brown-800); }
+  .mk-row{ padding:var(--s3) 0; border-bottom:1px solid var(--border); font-size:14px; } .mk-row:last-child{ border-bottom:none; }
+  .mk-cta{ display:inline-block; background:var(--brown-600); color:#fff; padding:12px 20px; border-radius:12px; font-weight:600; font-size:14px; text-decoration:none; }
+  .mk-case-row{ display:grid; grid-template-columns:1fr 1.4fr 1fr auto; gap:var(--s2); margin-bottom:var(--s2); align-items:center; }
+  .mk-public{ max-width:760px; margin:0 auto; padding:var(--s7) var(--s4); }
+  @media print{
+    .sidebar, .topbar, .mk-editor, .fab, .no-print, .toast{ display:none !important; }
+    #main-area{ margin-left:0 !important; } main{ padding:0 !important; }
+    body{ background:#fff !important; } .mk-doc{ border:none; } .mk-preview-wrap{ position:static; }
+    .mk-grid{ display:block; } .mk-public{ padding:0; }
+  }
 </style>
 </head>
 <body>
@@ -305,6 +331,7 @@ const NAV = [
   { id:'content', label:'Conteúdo', icon:'calendar' },
   { id:'finance', label:'Financeiro', icon:'dollar' },
   { id:'performance', label:'Performance', icon:'briefcase' },
+  { id:'mediakit', label:'Mídia Kit', icon:'file' },
   { id:'rewards', label:'Creator Rewards', icon:'gift' },
   { id:'settings', label:'Configurações', icon:'settings' },
 ];
@@ -345,6 +372,7 @@ async function loadAll(){
     await saveSettings();
   }
   await loadClientsFromSupabase();
+  await loadMediaKit();
 }
 
 /* ---- Clientes (brands) \u2014 persist\u00eancia real via Supabase, escopada por workspace ---- */
@@ -1811,12 +1839,13 @@ function render(){
   const el = document.getElementById('screen-content');
   if(STATE.tab==='clients' && STATE.clientDetailId){ el.innerHTML = screenClientDetail(STATE.clientDetailId); }
   else{
-    const screens = { home:screenHome, clients:screenClients, content:screenContent, finance:screenFinance, performance:screenPerformance, rewards:screenRewards, settings:screenSettings };
+    const screens = { home:screenHome, clients:screenClients, content:screenContent, finance:screenFinance, performance:screenPerformance, mediakit:screenMediaKit, rewards:screenRewards, settings:screenSettings };
     el.innerHTML = screens[STATE.tab]();
   }
   renderNav();
   bindDynamic();
-  document.getElementById('fabBtn').style.display = (['performance','rewards','settings'].includes(STATE.tab) || (STATE.tab==='clients' && STATE.clientDetailId) || (STATE.tab==='content' && contentSub!=='fluxo')) ? 'none' : 'flex';
+  if(STATE.tab==='mediakit') bindMediaKit();
+  document.getElementById('fabBtn').style.display = (['performance','mediakit','rewards','settings'].includes(STATE.tab) || (STATE.tab==='clients' && STATE.clientDetailId) || (STATE.tab==='content' && contentSub!=='fluxo')) ? 'none' : 'flex';
 }
 
 function bindDynamic(){
@@ -2038,6 +2067,7 @@ function screenAuth(){
         <div class="auth-brand"><span class="dot"></span> AKORA</div>
         <div class="secondary" style="margin-bottom:var(--s6)">${authMode==='signin' ? 'Entre pra continuar.' : 'Crie sua conta pra começar.'}</div>
         <div id="authErrorBox"></div>
+        ${authMode==='signup' ? `<div class="field"><label>Nome</label><input id="auth-name" type="text" placeholder="Seu nome ou nome artístico"></div>` : ''}
         <div class="field"><label>E-mail</label><input id="auth-email" type="email" placeholder="voce@email.com"></div>
         <div class="field"><label>Senha</label><input id="auth-password" type="password" placeholder="Mínimo 6 caracteres"></div>
         <button class="btn btn-primary btn-block" id="authSubmit" style="margin-bottom:var(--s3)">${authMode==='signin' ? 'Entrar' : 'Criar conta'}</button>
@@ -2064,7 +2094,9 @@ function bindAuthScreen(){
         if(error) throw error;
         await bootstrapAfterAuth();
       } else {
-        const { data, error } = await sb.auth.signUp({ email, password });
+        const fullName = val('auth-name');
+        if(!fullName){ errorBox.innerHTML = `<div class="auth-error">Informe seu nome</div>`; btn.disabled = false; return; }
+        const { data, error } = await sb.auth.signUp({ email, password, options:{ data:{ full_name: fullName } } });
         if(error) throw error;
         if(data.session){
           await bootstrapAfterAuth();
@@ -2112,8 +2144,195 @@ async function signOut(){
   renderAuthScreen();
 }
 
+/* ---------- Mídia Kit (Supabase: users + media_kit + Storage 'media-kit') ---------- */
+const MK_AGE_OPTIONS = ['13–17','18–24','25–34','35–44','45–54','55+'];
+let MK = { user:{}, kit:{ cases_extra:[] }, metrics:[], cases:[], packages:[] };
+
+async function loadMediaKit(){
+  if(!AUTH.workspaceId) return;
+  const uid_ = AUTH.session.user.id;
+  const [u, k, m, b, e] = await Promise.all([
+    sb.from('users').select('*').eq('id', uid_).maybeSingle(),
+    sb.from('media_kit').select('*').eq('workspace_id', AUTH.workspaceId).maybeSingle(),
+    sb.from('performance_metrics').select('platform,date,followers,views,likes,comments,shares,saves').eq('workspace_id', AUTH.workspaceId).order('date',{ascending:false}),
+    sb.from('brands').select('name,niche').eq('workspace_id', AUTH.workspaceId).eq('status','Finalizado'),
+    sb.from('estimates').select('style,platform,qty,total,currency').eq('workspace_id', AUTH.workspaceId).order('created_at',{ascending:false}).limit(6),
+  ]);
+  if(u.error) showToast('Erro ao carregar perfil: '+u.error.message);
+  MK.user = u.data || {};
+  MK.kit = k.data || { cases_extra:[] };
+  if(!Array.isArray(MK.kit.cases_extra)) MK.kit.cases_extra = [];
+  const seen = {}; MK.metrics = (m.data||[]).filter(r=> seen[r.platform] ? false : (seen[r.platform]=true));
+  MK.cases = (b.data||[]).map(r=>({ marca:r.name, descricao:r.niche }));
+  MK.packages = e.data || [];
+  if(!STATE.profile.name && (MK.user.name||MK.user.full_name)) STATE.profile.name = MK.user.name || MK.user.full_name;
+}
+
+function mkPublicUrl(slug){ return location.origin + location.pathname + '?mediakit=' + encodeURIComponent(slug); }
+function mkSlugify(t){ return (t||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^a-z0-9]+/g,'-').replace(/^-+|-+$/g,'').slice(0,40); }
+function mkFmtNum(n){ n=Number(n||0); return n>=1e6 ? (n/1e6).toFixed(1).replace('.0','')+'M' : n>=1e3 ? (n/1e3).toFixed(1).replace('.0','')+'K' : String(n); }
+function mkContactLink(c){
+  c=(c||'').trim(); if(!c) return null;
+  if(/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(c)) return { href:'mailto:'+c, label:'Entrar em contato' };
+  const digits=c.replace(/\D/g,''); if(digits.length>=10 && /^[+\d\s()\-.]+$/.test(c)) return { href:'https://wa.me/'+digits, label:'Chamar no WhatsApp' };
+  return { href:null, label:c };
+}
+// Mesma função renderiza o preview do editor e a página pública (e o PDF via window.print).
+function renderMediaKitHtml(d){
+  const pr=d.profile||{}, kit=d.kit||{}, name=pr.name||'Seu nome';
+  const cover = kit.foto_capa_url ? `style="background-image:url('${esc(kit.foto_capa_url)}')"` : '';
+  const av = pr.avatar_url ? `style="background-image:url('${esc(pr.avatar_url)}')"` : '';
+  const metrics=d.metrics||[], cases=[...(d.cases||[]), ...(kit.cases_extra||[]).filter(c=>c.marca)], pk=d.packages||[];
+  const demo=[kit.publico_faixa_etaria&&['Faixa etária',kit.publico_faixa_etaria], kit.publico_genero&&['Gênero',kit.publico_genero], kit.publico_localizacao&&['Localização',kit.publico_localizacao]].filter(Boolean);
+  const cl=mkContactLink(pr.contact);
+  return `<div class="mk-doc">
+    <div class="mk-cover" ${cover}></div>
+    <div class="mk-head">
+      <div class="mk-avatar" ${av}>${pr.avatar_url?'':esc(name.charAt(0).toUpperCase())}</div>
+      <div class="mk-name">${esc(name)}</div>
+      ${pr.niche?`<div class="mk-niche">${esc(pr.niche)}</div>`:''}
+      ${pr.bio?`<div class="mk-bio">${esc(pr.bio)}</div>`:''}
+      ${kit.bio_extendida?`<div class="mk-bio" style="color:var(--text-secondary)">${esc(kit.bio_extendida)}</div>`:''}
+    </div>
+    ${metrics.length?`<div class="mk-sec"><h3>Métricas por rede</h3><div class="mk-metrics">${metrics.map(m=>`<div class="mk-metric"><div class="k">${esc(m.platform)}</div><div class="v">${mkFmtNum(m.followers)}</div><div class="k">seguidores · ${mkFmtNum(m.views)} views</div></div>`).join('')}</div></div>`:''}
+    ${demo.length?`<div class="mk-sec"><h3>Público</h3>${demo.map(([k,v])=>`<div class="mk-row"><span style="color:var(--text-secondary)">${k}:</span> ${esc(v)}</div>`).join('')}</div>`:''}
+    ${cases.length?`<div class="mk-sec"><h3>Cases</h3>${cases.map(c=>`<div class="mk-row"><strong>${esc(c.marca)}</strong>${c.descricao?' — '+esc(c.descricao):''}${c.link&&/^https?:\/\//.test(c.link)?` · <a href="${esc(c.link)}" target="_blank" rel="noopener" style="color:var(--brown-600)">ver</a>`:''}</div>`).join('')}</div>`:''}
+    ${pk.length?`<div class="mk-sec"><h3>Pacotes</h3>${pk.map(x=>`<div class="mk-row">${esc(x.style||'')} · ${esc(x.platform||'')} · ${x.qty||1}x <span style="float:right;font-weight:700">${fmtCur(x.total,x.currency)}</span></div>`).join('')}</div>`:''}
+    ${cl?`<div class="mk-sec">${cl.href?`<a class="mk-cta" href="${esc(cl.href)}" target="_blank" rel="noopener">${cl.label}</a>`:`<div class="mk-row">${esc(cl.label)}</div>`}</div>`:''}
+  </div>`;
+}
+
+function mkDataFromState(){ return { profile:{ name:MK.user.name, avatar_url:MK.user.avatar_url, bio:MK.user.bio, niche:MK.user.niche, contact:MK.user.contact }, kit:MK.kit, metrics:MK.metrics, cases:MK.cases, packages:MK.packages }; }
+
+function screenMediaKit(){
+  const u=MK.user, k=MK.kit, ce=k.cases_extra||[];
+  const published = !!k.slug;
+  return `
+    ${topbar('Seu cartão de visitas para marcas')}
+    <main>
+      <div class="mk-grid">
+        <div class="mk-editor">
+          <h2 style="font-size:19px;margin-bottom:var(--s4)">Mídia Kit</h2>
+          <div class="card">
+            <div style="font-weight:600;margin-bottom:var(--s4)">Perfil público</div>
+            <div class="field-row">
+              <div class="field"><label>Nome</label><input id="mk-name" value="${esc(u.name||'')}"></div>
+              <div class="field"><label>Nicho</label><select id="mk-niche"><option value=""></option>${NICHE_OPTIONS.map(n=>`<option ${u.niche===n?'selected':''}>${n}</option>`).join('')}</select></div>
+            </div>
+            <div class="field"><label>Foto de perfil</label><input type="file" id="mk-avatar-file" accept="image/jpeg,image/png,image/webp"><div class="field-hint">JPG, PNG ou WebP até 5MB. Enviar uma nova substitui a anterior.</div></div>
+            <div class="field"><label>Bio curta</label><textarea id="mk-bio" rows="2" maxlength="200">${esc(u.bio||'')}</textarea></div>
+            <div class="field"><label>Contato (e-mail ou WhatsApp)</label><input id="mk-contact" value="${esc(u.contact||'')}" placeholder="voce@email.com ou +55 11 99999-9999"></div>
+          </div>
+          <div class="card">
+            <div style="font-weight:600;margin-bottom:var(--s4)">Detalhes do Mídia Kit</div>
+            <div class="field"><label>Bio estendida</label><textarea id="mk-bioext" rows="4">${esc(k.bio_extendida||'')}</textarea></div>
+            <div class="field"><label>Foto de capa</label><input type="file" id="mk-cover-file" accept="image/jpeg,image/png,image/webp"></div>
+            <div class="field-row">
+              <div class="field"><label>Faixa etária do público</label><select id="mk-age"><option value=""></option>${MK_AGE_OPTIONS.map(a=>`<option ${k.publico_faixa_etaria===a?'selected':''}>${a}</option>`).join('')}</select></div>
+              <div class="field"><label>Gênero</label><input id="mk-gender" value="${esc(k.publico_genero||'')}" placeholder="ex: 78% mulheres"></div>
+            </div>
+            <div class="field"><label>Localização do público</label><input id="mk-loc" value="${esc(k.publico_localizacao||'')}" placeholder="ex: Brasil (82%), Portugal (6%)"></div>
+            <div style="font-weight:600;margin:var(--s4) 0 var(--s2)">Cases extras</div>
+            <div class="field-hint" style="margin-bottom:var(--s3)">Marcas com status “Finalizado” em Clientes entram automaticamente.</div>
+            <div id="mk-cases">${ce.map((c,i)=>`<div class="mk-case-row"><input data-case="marca" placeholder="Marca" value="${esc(c.marca||'')}"><input data-case="descricao" placeholder="Descrição" value="${esc(c.descricao||'')}"><input data-case="link" placeholder="Link" value="${esc(c.link||'')}"><div class="icon-btn" data-rmcase="${i}">${icon('x',14)}</div></div>`).join('')}</div>
+            <button class="btn btn-secondary btn-sm" id="mk-addcase">${icon('plus',14)} Adicionar case</button>
+          </div>
+          <div class="card">
+            <div class="field"><label>Link público (slug)</label><input id="mk-slug" value="${esc(k.slug||'')}" placeholder="seu-nome"><div class="field-hint">${published?esc(mkPublicUrl(k.slug)):'Ainda não publicado. Clique em “Gerar link público”.'}</div></div>
+            <div style="display:flex;gap:var(--s2);flex-wrap:wrap">
+              <button class="btn btn-primary" id="mk-save">Salvar Mídia Kit</button>
+              <button class="btn btn-secondary" id="mk-publish">Gerar link público</button>
+              <button class="btn btn-secondary" id="mk-copy" ${published?'':'disabled'}>${icon('copy',15)} Copiar link</button>
+              <button class="btn btn-secondary" id="mk-pdf">Exportar PDF</button>
+            </div>
+          </div>
+        </div>
+        <div class="mk-preview-wrap"><div class="field-hint no-print" style="margin-bottom:var(--s2)">Pré-visualização ao vivo</div><div id="mk-preview">${renderMediaKitHtml(mkDataFromState())}</div></div>
+      </div>
+    </main>`;
+}
+
+function mkReadForm(){
+  MK.user.name=val('mk-name'); MK.user.niche=val('mk-niche'); MK.user.bio=val('mk-bio'); MK.user.contact=val('mk-contact');
+  MK.kit.bio_extendida=val('mk-bioext'); MK.kit.publico_faixa_etaria=val('mk-age'); MK.kit.publico_genero=val('mk-gender'); MK.kit.publico_localizacao=val('mk-loc');
+  MK.kit.cases_extra=[...document.querySelectorAll('#mk-cases .mk-case-row')].map(r=>({ marca:r.querySelector('[data-case=marca]').value.trim(), descricao:r.querySelector('[data-case=descricao]').value.trim(), link:r.querySelector('[data-case=link]').value.trim() }));
+}
+function mkRefreshPreview(){ mkReadForm(); const el=document.getElementById('mk-preview'); if(el) el.innerHTML=renderMediaKitHtml(mkDataFromState()); }
+
+async function mkPersist(extraKit){
+  mkReadForm();
+  const uid_=AUTH.session.user.id;
+  const ru = await sb.from('users').update({ name:MK.user.name, full_name:MK.user.name, niche:MK.user.niche, bio:MK.user.bio, contact:MK.user.contact, avatar_url:MK.user.avatar_url||null }).eq('id', uid_);
+  if(ru.error) throw ru.error;
+  const payload = { workspace_id:AUTH.workspaceId, bio_extendida:MK.kit.bio_extendida, foto_capa_url:MK.kit.foto_capa_url||null, publico_faixa_etaria:MK.kit.publico_faixa_etaria||null, publico_genero:MK.kit.publico_genero, publico_localizacao:MK.kit.publico_localizacao, cases_extra:MK.kit.cases_extra, slug:MK.kit.slug||null, updated_at:new Date().toISOString(), ...(extraKit||{}) };
+  const rk = await sb.from('media_kit').upsert(payload, { onConflict:'workspace_id' }).select().single();
+  if(rk.error) throw rk.error;
+  MK.kit = rk.data; if(!Array.isArray(MK.kit.cases_extra)) MK.kit.cases_extra=[];
+  STATE.profile.name = MK.user.name || STATE.profile.name;
+}
+
+async function mkUpload(file, kind){
+  if(!file) return;
+  if(file.size > 5*1024*1024){ showToast('Arquivo maior que 5MB'); return; }
+  if(!/^image\/(jpeg|png|webp)$/.test(file.type)){ showToast('Use JPG, PNG ou WebP'); return; }
+  const ext = file.type==='image/png' ? 'png' : file.type==='image/webp' ? 'webp' : 'jpg';
+  const path = `${AUTH.session.user.id}/${kind}.${ext}`;
+  // remove variantes de outras extensões para manter no máximo 2 arquivos por usuário
+  const others = ['jpg','png','webp'].filter(x=>x!==ext).map(x=>`${AUTH.session.user.id}/${kind}.${x}`);
+  await sb.storage.from('media-kit').remove(others);
+  const { error } = await sb.storage.from('media-kit').upload(path, file, { upsert:true, contentType:file.type, cacheControl:'3600' });
+  if(error){ showToast('Erro no upload: '+error.message); return; }
+  const url = sb.storage.from('media-kit').getPublicUrl(path).data.publicUrl + '?v=' + Date.now();
+  if(kind==='avatar') MK.user.avatar_url = url; else MK.kit.foto_capa_url = url;
+  try{ await mkPersist(); showToast('Imagem enviada'); }catch(e){ showToast('Erro ao salvar: '+e.message); }
+  render();
+}
+
+function bindMediaKit(){
+  const form = document.querySelector('.mk-editor');
+  form.addEventListener('input', mkRefreshPreview);
+  form.addEventListener('change', mkRefreshPreview);
+  document.getElementById('mk-avatar-file').addEventListener('change', e=>mkUpload(e.target.files[0],'avatar'));
+  document.getElementById('mk-cover-file').addEventListener('change', e=>mkUpload(e.target.files[0],'capa'));
+  document.getElementById('mk-addcase').addEventListener('click', ()=>{ mkReadForm(); MK.kit.cases_extra.push({marca:'',descricao:'',link:''}); render(); });
+  document.querySelectorAll('[data-rmcase]').forEach(el=>el.addEventListener('click', ()=>{ mkReadForm(); MK.kit.cases_extra.splice(Number(el.dataset.rmcase),1); render(); }));
+  document.getElementById('mk-save').addEventListener('click', async ()=>{
+    MK.kit.slug = mkSlugify(val('mk-slug')) || null;
+    try{ await mkPersist(); showToast('Mídia Kit salvo'); render(); }
+    catch(e){ showToast(e.code==='23505' ? 'Esse link já está em uso. Escolha outro.' : 'Erro ao salvar: '+e.message); }
+  });
+  document.getElementById('mk-publish').addEventListener('click', async ()=>{
+    mkReadForm();
+    const base = mkSlugify(val('mk-slug')) || mkSlugify(MK.user.name) || 'creator';
+    for(let i=0;i<4;i++){
+      MK.kit.slug = i===0 ? base : base+'-'+Math.random().toString(36).slice(2,6);
+      try{ await mkPersist(); showToast('Link público gerado'); render(); return; }
+      catch(e){ if(e.code!=='23505'){ showToast('Erro ao publicar: '+e.message); return; } }
+    }
+    showToast('Não foi possível gerar um link único. Tente outro nome.');
+  });
+  document.getElementById('mk-copy').addEventListener('click', async ()=>{
+    if(!MK.kit.slug) return;
+    try{ await navigator.clipboard.writeText(mkPublicUrl(MK.kit.slug)); showToast('Link copiado'); }catch(e){ showToast(mkPublicUrl(MK.kit.slug)); }
+  });
+  document.getElementById('mk-pdf').addEventListener('click', ()=>{ mkRefreshPreview(); window.print(); });
+}
+
+// Página pública (sem login): index.html?mediakit=<slug>. Dado fresco via RPC a cada acesso.
+async function renderPublicMediaKit(slug){
+  document.body.style.background = 'var(--bg)';
+  document.getElementById('app').innerHTML = `<div class="mk-public"><div class="secondary" style="text-align:center;padding:var(--s9)">Carregando…</div></div>`;
+  const { data, error } = await sb.rpc('get_media_kit_public', { p_slug: slug });
+  const root = document.querySelector('.mk-public');
+  if(error || !data){ root.innerHTML = `<div class="secondary" style="text-align:center;padding:var(--s9)">Mídia Kit não encontrado.</div>`; return; }
+  document.title = (data.profile?.name || 'Mídia Kit') + ' — Mídia Kit';
+  root.innerHTML = renderMediaKitHtml(data) + `<div class="no-print" style="text-align:center;margin-top:var(--s5)"><button class="btn btn-secondary" onclick="window.print()">Baixar PDF</button></div>`;
+}
+
 /* ---------- Init ---------- */
 (async function init(){
+  const publicSlug = new URLSearchParams(location.search).get('mediakit');
+  if(publicSlug){ await renderPublicMediaKit(publicSlug); return; }
   const { data:{ session } } = await sb.auth.getSession();
   if(!session){ renderAuthScreen(); return; }
   AUTH.session = session;
